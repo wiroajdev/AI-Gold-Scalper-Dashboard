@@ -1,0 +1,6 @@
+{
+  "symbol": "XAUUSD.iux",
+  "interval": "5m",
+  "auto_update": true,
+  "base_tf": "M5"
+}

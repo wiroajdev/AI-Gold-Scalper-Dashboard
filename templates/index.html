@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Gold Scalper — Price Action Sniper Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.2.1">
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Top App Bar -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-icon">👑</div>
+                <div class="brand-text">
+                    <h1>AI Gold Scalper <span id="activeSymbolBadge" class="badge-symbol">XAUUSD.iux</span> <span class="badge-live">LIVE</span></h1>
+                    <p>Direct MT5 Feed • 9+ Ensemble Machine Learning & Regime Engine</p>
+                </div>
+            </div>
+
+            <!-- MT5 Data Freshness Badge -->
+            <div class="header-meta">
+                <div class="mt5-freshness-box">
+                    <span class="pulse-indicator" id="mt5Pulse"></span>
+                    <div class="freshness-text">
+                        <span class="label">EXPORTED PRICE DATA TIME</span>
+                        <strong id="latestBarTime" class="mono">Connecting...</strong>
+                    </div>
+                    <span id="dataSourceBadge" style="margin-left:10px;padding:2px 8px;border-radius:6px;font-size:0.72rem;font-weight:600;letter-spacing:0.05em;background:rgba(245,158,11,0.2);color:#f59e0b;border:1px solid #f59e0b;">CSV Cached</span>
+                </div>
+                <div class="server-time-box">
+                    <span class="label">SERVER TIME</span>
+                    <span id="serverTime" class="mono">--:--:--</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Automation & Control Bar -->
+        <section class="control-panel card">
+            <div class="control-group">
+                <!-- Symbol Selector / Custom Input -->
+                <div class="control-item symbol-box">
+                    <label for="symbolInput" class="label-title">Gold Symbol</label>
+                    <div class="symbol-input-group">
+                        <input type="text" id="symbolInput" class="mono" value="XAUUSD.iux" list="symbolDatalist" placeholder="e.g. XAUUSD.iux">
+                        <datalist id="symbolDatalist">
+                            <option value="XAUUSD.iux"></option>
+                            <option value="XAUUSD"></option>
+                            <option value="GOLD"></option>
+                            <option value="XAUUSDm"></option>
+                        </datalist>
+                        <button id="saveSymbolBtn" class="btn-secondary" title="Save symbol & fetch">Apply</button>
+                    </div>
+                </div>
+
+                <!-- Toggle Switch -->
+                <div class="control-item toggle-box">
+                    <label class="switch-label">
+                        <span class="label-title">Auto-Update</span>
+                        <span id="autoUpdateStatusText" class="status-off">OFF</span>
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="autoUpdateToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <!-- Interval Dropdown -->
+                <div class="control-item">
+                    <label for="intervalSelect" class="label-title">Update Interval</label>
+                    <div class="select-wrapper">
+                        <select id="intervalSelect">
+                            <option value="5m" selected>5 Minutes</option>
+                            <option value="15m">15 Minutes</option>
+                            <option value="30m">30 Minutes</option>
+                            <option value="1h">1 Hour</option>
+                            <option value="2h">2 Hours</option>
+                            <option value="3h">3 Hours</option>
+                            <option value="4h">4 Hours</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Next Scheduled Run Badge -->
+                <div class="control-item next-run-display">
+                    <span class="label-title">Next Scheduled Sync</span>
+                    <div class="next-run-values">
+                        <strong id="nextRunClock" class="mono">--:--:--</strong>
+                        <span id="nextRunCountdown" class="countdown-tag">Paused</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="soundToggleBtn" class="btn-secondary sound-active" title="คลิกเพื่อเปิด/ปิดเสียงแจ้งเตือน (Alert Sound ON/OFF)">
+                    <span class="btn-icon" id="soundBtnIcon">🔊</span>
+                    <span class="btn-text" id="soundBtnText">Sound: ON</span>
+                </button>
+                <a href="/report" target="_blank" class="btn-secondary" style="text-decoration:none;" title="เปิดรายงานวิเคราะห์เชิงลึก 9+ Ensemble Models & Choppy Market Filter">
+                    <span class="btn-icon">📑</span>
+                    <span class="btn-text">Ensemble Report</span>
+                </a>
+                <a href="/guide" target="_blank" class="btn-secondary" style="text-decoration:none;" title="เปิดคู่มือการใช้งานและการตีความผล (User Guide & Interpretation Manual)">
+                    <span class="btn-icon">📖</span>
+                    <span class="btn-text">User Guide</span>
+                </a>
+                <button id="testAlertBtn" class="btn-secondary" title="ทดสอบแสดงหน้าต่างแจ้งเตือน Alert Dialog">
+                    <span class="btn-icon">🔔</span>
+                    <span class="btn-text">Test Alert</span>
+                </button>
+                <button id="alertConfigBtn" class="btn-secondary btn-alert-config" title="ตั้งค่าการแจ้งเตือน — เปิด/ปิดแต่ละประเภท">
+                    <span class="btn-icon">⚙️</span>
+                    <span class="btn-text">Alert Config</span>
+                </button>
+                <button id="fetchNowBtn" class="btn-primary">
+                    <span class="btn-icon">⚡</span>
+                    <span class="btn-text">Fetch &amp; Analyze Now</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Setup Tracker: MTF 3-Step Trading Plan -->
+        <section class="setup-tracker-section">
+            <div class="card setup-tracker-card" id="setupTrackerCard">
+                <div class="card-header">
+                    <span class="card-subtitle">🎯 MTF Trade Setup Tracker</span>
+                    <div class="setup-tracker-header-right">
+                        <span id="setupBiasBadge" class="setup-bias-badge neutral">WAITING</span>
+                        <span id="setupStateBadge" class="setup-state-badge idle">IDLE</span>
+                    </div>
+                </div>
+
+                <!-- Step Progress Bar -->
+                <div class="setup-steps-row">
+                    <div class="setup-step" id="setupStep1">
+                        <div class="step-icon">1</div>
+                        <div class="step-content">
+                            <div class="step-title">Macro Trend</div>
+                            <div class="step-desc" id="setupStep1Desc">H1 &amp; M15 must be TRENDING same direction</div>
+                        </div>
+                        <div class="step-status" id="setupStep1Status">⏳</div>
+                    </div>
+                    <div class="setup-step-arrow">→</div>
+                    <div class="setup-step" id="setupStep2">
+                        <div class="step-icon">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Pullback Detected</div>
+                            <div class="step-desc" id="setupStep2Desc">M1 / M5 enters RANGING or reverses</div>
+                        </div>
+                        <div class="step-status" id="setupStep2Status">⏳</div>
+                    </div>
+                    <div class="setup-step-arrow">→</div>
+                    <div class="setup-step" id="setupStep3">
+                        <div class="step-icon">3</div>
+                        <div class="step-content">
+                            <div class="step-title">Price Action Entry</div>
+                            <div class="step-desc" id="setupStep3Desc">Pinbar or Engulfing at key zone</div>
+                        </div>
+                        <div class="step-status" id="setupStep3Status">⏳</div>
+                    </div>
+                </div>
+
+                <!-- Confidence Bar -->
+                <div class="setup-confidence-row">
+                    <span class="setup-label">Confidence</span>
+                    <div class="setup-confidence-track">
+                        <div class="setup-confidence-fill" id="setupConfidenceFill" style="width:0%"></div>
+                    </div>
+                    <span class="setup-confidence-pct" id="setupConfidencePct">0%</span>
+                    <span class="setup-threshold-marker" title="Alert threshold">▲60</span>
+                </div>
+
+                <!-- Zone Info -->
+                <div class="setup-zones-row" id="setupZonesRow">
+                    <span class="setup-label">Zones Hit:</span>
+                    <span id="setupZonesHit" class="setup-zones-list">—</span>
+                    <span class="setup-label" style="margin-left:12px;">Pattern:</span>
+                    <span id="setupPatternLabel" class="setup-pattern-label">—</span>
+                </div>
+
+                <!-- Alert Message -->
+                <div id="setupAlertBox" class="setup-alert-box" style="display:none">
+                    <span class="setup-alert-icon">🔔</span>
+                    <span id="setupAlertMsg" class="setup-alert-msg"></span>
+                    <span id="setupCooldownBadge" class="setup-cooldown-badge"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ AI RADAR — PRICE ACTION SNIPER PANEL ═══ -->
+        <section class="sniper-panel card" id="sniperPanel">
+            <!-- Falling Knife Banner -->
+            <div id="fallingKnifeBanner" class="falling-knife-banner" style="display:none;">
+                <span class="fk-icon">🔪</span>
+                <div class="fk-content">
+                    <strong>FALLING KNIFE DETECTED</strong>
+                    <span>Price is in aggressive bearish momentum — Wait for a rejection candle / lower wick before entry</span>
+                </div>
+            </div>
+
+            <div class="sniper-grid">
+                <!-- Directional Bias -->
+                <div class="sniper-bias-block">
+                    <div class="sniper-label">🎯 Directional Bias</div>
+                    <div id="biasDisplay" class="bias-display neutral">NEUTRAL</div>
+                    <div id="biasDetail" class="bias-detail">Analyzing market structure...</div>
+                </div>
+
+                <!-- Edge Score -->
+                <div class="sniper-score-block">
+                    <div class="sniper-label">⚡ Edge Score</div>
+                    <div class="edge-score-wrap">
+                        <span id="edgeScoreNum" class="edge-score-num">0</span>
+                        <span class="edge-score-max">/100</span>
+                    </div>
+                    <div class="edge-bar-bg">
+                        <div id="edgeScoreBar" class="edge-bar-fill" style="width:0%"></div>
+                    </div>
+                    <span id="edgeScoreLabel" class="edge-label">LOW / CHOPPY</span>
+                </div>
+
+                <!-- KER Score -->
+                <div class="sniper-metric-block">
+                    <div class="sniper-label">📈 Market Efficiency (KER)</div>
+                    <div id="kerScore" class="ker-score">0.50</div>
+                    <div id="kerLabel" class="ker-label">DRIFTING</div>
+                    <div style="font-size:0.74rem;color:#64748b;margin-top:4px;">H1+M15 Average</div>
+                </div>
+
+                <!-- MTF Stack -->
+                <div class="sniper-mtf-block">
+                    <div class="sniper-label">🗂️ MTF Stack <span id="mtfAlignCount" class="mtf-align-count">0/4</span></div>
+                    <div class="mtf-stack" id="mtfStackPills">
+                        <span class="mtf-stack-pill neutral">H1 —</span>
+                        <span class="mtf-stack-pill neutral">M15 —</span>
+                        <span class="mtf-stack-pill neutral">M5 —</span>
+                        <span class="mtf-stack-pill neutral">M1 —</span>
+                    </div>
+                    <div id="noTradeZone" class="no-trade-zone" style="display:none;">⛔ NO TRADE ZONE</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Notification Banner (if any) -->
+        <div id="errorBanner" class="alert-banner" style="display: none;">
+            <span class="alert-icon">⚠️</span>
+            <span id="errorMessage">Error text</span>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <main class="dashboard-grid">
+            <!-- Card 1: Executive Decision -->
+            <div class="card decision-card" id="decisionCard">
+                <div class="card-header">
+                    <div class="decision-title-group">
+                        <span class="card-subtitle">Executive Decision</span>
+                        <div class="tf-select-wrapper" title="เลือก Timeframe สำหรับการประมวลผล 9+ AI Ensemble Models">
+                            <select id="baseTfSelect" class="tf-select-pill">
+                                <option value="M1">TF: M1</option>
+                                <option value="M5" selected>TF: M5</option>
+                                <option value="M15">TF: M15</option>
+                                <option value="H1">TF: H1</option>
+                                <option value="H4">TF: H4</option>
+                                <option value="D1">TF: D1</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="confidence-badge">
+                        <span class="label">CONFIDENCE</span>
+                        <strong id="confidenceScore" class="mono">0%</strong>
+                    </div>
+                </div>
+
+                <div class="action-badge-wrapper">
+                    <div id="actionBadge" class="action-badge hold">
+                        ■ INITIALIZING
+                    </div>
+                </div>
+
+                <div class="progress-bar-bg">
+                    <div id="confidenceBar" class="progress-bar-fill" style="width: 0%;"></div>
+                </div>
+
+                <p id="decisionReason" class="decision-reason">
+                    Loading initial model state...
+                </p>
+
+                <!-- Target Price Levels Grid -->
+                <div class="levels-grid">
+                    <div class="level-box">
+                        <span class="level-label">Suggested Entry</span>
+                        <strong id="entryPrice" class="mono">$0.00</strong>
+                    </div>
+                    <div class="level-box sl-box">
+                        <span class="level-label">Stop Loss</span>
+                        <strong id="slPrice" class="mono">$0.00</strong>
+                    </div>
+                    <div class="level-box tp-box">
+                        <span class="level-label">Take Profit 1</span>
+                        <strong id="tp1Price" class="mono">$0.00</strong>
+                    </div>
+                    <div class="level-box rr-box">
+                        <span class="level-label">R:R Ratio</span>
+                        <strong id="rrRatio" class="mono">1:0.0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Market Regime Detector -->
+            <div class="card regime-card">
+                <div class="card-header">
+                    <span class="card-subtitle">Market Regime Detector</span>
+                    <span class="tf-pill" id="regimeTfPill">TF: M5</span>
+                </div>
+
+                <div class="regime-status-wrapper">
+                    <span id="regimeBadge" class="regime-badge ranging">RANGING</span>
+                </div>
+                <p id="regimeDesc" class="regime-desc">
+                    Calculating market structure and volatility bounds...
+                </p>
+
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <span class="metric-label">ADX Trend Power</span>
+                        <strong id="adxValue" class="mono">--</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">ATR Volatility</span>
+                        <strong id="atrValue" class="mono">$--</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Risk Multiplier</span>
+                        <strong id="riskMultValue" class="mono">1.0x</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Volatility State</span>
+                        <strong id="volStateValue">NORMAL</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Voting Distribution -->
+            <div class="card votes-card">
+                <div class="card-header">
+                    <span class="card-subtitle">Ensemble Consensus</span>
+                    <span class="mono" id="currentPriceDisplay" style="color: #fbbf24; font-weight: 700;">$0.00</span>
+                </div>
+
+                <div class="vote-counts">
+                    <span class="buy-count">Buy: <strong id="buyCount">0</strong></span>
+                    <span class="sell-count">Sell: <strong id="sellCount">0</strong></span>
+                    <span class="hold-count">Hold: <strong id="holdCount">0</strong></span>
+                </div>
+
+                <div class="vote-split-bar">
+                    <div id="voteBuyBar" class="split-buy" style="width: 0%;"></div>
+                    <div id="voteSellBar" class="split-sell" style="width: 0%;"></div>
+                    <div id="voteHoldBar" class="split-hold" style="width: 100%;"></div>
+                </div>
+
+                <div class="scalp-targets-box">
+                    <div class="target-row">
+                        <span>Recommended TP:</span>
+                        <strong id="recTpPts" class="mono text-green">+0 pts</strong>
+                    </div>
+                    <div class="target-row">
+                        <span>Recommended SL:</span>
+                        <strong id="recSlPts" class="mono text-red">-0 pts</strong>
+                    </div>
+                    <div class="target-row">
+                        <span>Staging Directory:</span>
+                        <code id="stagingPathDisplay" class="staging-path">C:\web-apps\AI-Gold-Scalper-Dashboard\exportedpricedata\</code>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+
+        <!-- Bottom Grid: 9 Models Breakdown &amp; MTF Matrix -->
+        <section class="details-grid">
+            <!-- 9-Model Table -->
+            <div class="card table-card">
+                <div class="card-header">
+                    <h3>🤖 9+ Ensemble Models Voting Breakdown</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Algorithm</th>
+                                <th>Category</th>
+                                <th style="text-align: right;">Current Vote</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelsTableBody">
+                            <tr><td colspan="3" style="text-align: center; color: #64748b;">Loading models...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Multi-Timeframe Alignment Matrix -->
+            <div class="card table-card">
+                <div class="card-header">
+                    <h3>📊 Multi-Timeframe Alignment Matrix</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>TF</th>
+                                <th>Regime</th>
+                                <th>Close</th>
+                                <th>ADX</th>
+                                <th>ATR</th>
+                                <th>KER</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtfTableBody">
+                            <tr><td colspan="6" style="text-align: center; color: #64748b;">Loading multi-timeframe data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: TradingView Interactive Price Chart -->
+        <section class="chart-section">
+            <div class="card chart-card" id="chartCardContainer">
+                <div class="chart-header">
+                    <!-- Top Bar: Title on left, Action buttons on right (Clean single row) -->
+                    <div class="chart-top-bar">
+                        <div class="chart-title">
+                            <span class="chart-icon">📈</span>
+                            <h3>TradingView Price Action Chart</h3>
+                            <span class="tf-badge mono" id="activeChartTfBadge">M5</span>
+                        </div>
+
+                        <div class="chart-actions">
+                            <!-- Timeframe selector -->
+                            <div class="tf-btn-group" id="chartTfButtons">
+                                <button type="button" class="tf-pill" data-tf="M1">M1</button>
+                                <button type="button" class="tf-pill active" data-tf="M5">M5</button>
+                                <button type="button" class="tf-pill" data-tf="M15">M15</button>
+                                <button type="button" class="tf-pill" data-tf="H1">H1</button>
+                                <button type="button" class="tf-pill" data-tf="H4">H4</button>
+                                <button type="button" class="tf-pill" data-tf="D1">D1</button>
+                            </div>
+
+                            <!-- Utility tools -->
+                            <div class="chart-tool-buttons">
+                                <button type="button" class="tool-btn active" id="toggleAiLevelsBtn" title="Toggle AI Entry/SL/TP Levels">
+                                    🎯 AI Levels
+                                </button>
+                                <button type="button" class="tool-btn active" id="toggleSessionLevelsBtn" title="Toggle Asian &amp; London Session Range Lines">
+                                    🕐 Session Levels
+                                </button>
+                                <button type="button" class="tool-btn active" id="toggleOrderFlowBtn" title="Toggle Order Flow / Market Structure Zones — Demand/Supply Flip Zones, Order Blocks, BOS Levels">
+                                    🔄 Order Flow / MS
+                                </button>
+                                <button type="button" class="tool-btn" id="fitContentBtn" title="Auto Fit Chart Scale">
+                                    ⤢ Fit
+                                </button>
+                                <button type="button" class="tool-btn" id="fullscreenChartBtn" title="Toggle Fullscreen View">
+                                    ⛶ Maximize
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sub Bar: Dedicated Legend with fixed height to prevent layout shift -->
+                    <div class="chart-legend-bar">
+                        <div class="chart-legend mono" id="chartLegend">
+                            <span class="legend-time" id="legendTime">--</span>
+                            <span class="legend-item">O: <strong id="legendOpen">--</strong></span>
+                            <span class="legend-item">H: <strong id="legendHigh">--</strong></span>
+                            <span class="legend-item">L: <strong id="legendLow">--</strong></span>
+                            <span class="legend-item">C: <strong id="legendClose">--</strong></span>
+                            <span class="legend-item" id="legendChangeWrapper">Chg: <strong id="legendChange">--</strong></span>
+                            <span class="legend-item">Vol: <strong id="legendVol">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                    <!-- Session Range Info Strip -->
+                    <div class="session-levels-strip">
+                        <span class="session-strip-label">Session Range</span>
+                        <span id="sessionLevelsBadge" class="session-levels-badge mono" title="Asian &amp; London session H/L levels (ICT time)">Loading session levels...</span>
+                    </div>
+
+                    <!-- Order Flow / Market Structure Info Strip -->
+                    <div class="session-levels-strip order-flow-strip" id="orderFlowStrip">
+                        <span class="session-strip-label" style="color:#a78bfa;">Order Flow</span>
+                        <span id="orderFlowBiasBadge" class="session-levels-badge mono" title="Order Flow Market Bias based on session breakout flip zones">Loading order flow...</span>
+                        <span id="orderFlowLevelsBadge" class="session-levels-badge mono" style="margin-left:12px;" title="Active Demand / Supply zones count"></span>
+                    </div>
+
+                <!-- Chart Container -->
+                <div class="chart-body" id="tvChartContainer">
+                    <div class="chart-loading" id="chartLoadingOverlay">
+                        <div class="spinner"></div>
+                        <span>Loading TradingView Chart Data...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ PROFESSIONAL ADVICE & INSTITUTIONAL FLOW TRACKER ═══ -->
+        <section class="pro-advice-section">
+            <div class="card pro-advice-card" id="proAdviceCard">
+                <!-- Card Header -->
+                <div class="card-header pro-advice-header">
+                    <div class="pro-advice-title-wrap">
+                        <span class="pro-advice-main-title">🧠 Professional Advice's Trade Setup</span>
+                        <span class="pro-advice-time mono" id="proAdviceUpdated">Updated: --:--:--</span>
+                    </div>
+                    <div class="pro-advice-header-badges">
+                        <span id="proAdviceActionBadge" class="pro-badge neutral">MONITORING</span>
+                        <span id="proAdviceSetupName" class="pro-setup-name-badge">Awaiting Analysis...</span>
+                        <span id="proAdviceRrBadge" class="pro-rr-badge mono">R:R: —</span>
+                    </div>
+                </div>
+
+                <!-- Execution Grid (Matrix) -->
+                <div class="pro-matrix-grid">
+                    <div class="pro-matrix-card">
+                        <span class="pro-matrix-label">DIRECTION / ACTION</span>
+                        <strong class="pro-matrix-val" id="proActionVal">HOLD</strong>
+                    </div>
+                    <div class="pro-matrix-card">
+                        <span class="pro-matrix-label">ENTRY ZONE</span>
+                        <strong class="pro-matrix-val mono text-gold" id="proEntryVal">—</strong>
+                    </div>
+                    <div class="pro-matrix-card">
+                        <span class="pro-matrix-label">STOP LOSS (SL)</span>
+                        <strong class="pro-matrix-val mono text-red" id="proSlVal">—</strong>
+                    </div>
+                    <div class="pro-matrix-card">
+                        <span class="pro-matrix-label">TARGET 1 (TP1)</span>
+                        <strong class="pro-matrix-val mono text-green" id="proTp1Val">—</strong>
+                    </div>
+                    <div class="pro-matrix-card">
+                        <span class="pro-matrix-label">TARGET 2 (RUNNER)</span>
+                        <strong class="pro-matrix-val mono text-blue" id="proTp2Val">—</strong>
+                    </div>
+                </div>
+
+                <!-- Section 1: Market Situation & Actionable Advice -->
+                <div class="pro-section-box">
+                    <div class="pro-section-header">
+                        <div class="pro-section-title-wrap">
+                            <span class="pro-section-icon">📋</span>
+                            <span class="pro-section-title">Section 1: Market Situation &amp; Actionable Advice (Price Action &amp; Structure)</span>
+                        </div>
+                        <span class="pro-narrative-tag mono" id="proNarrativeTag">TECHNICAL PA</span>
+                    </div>
+                    <div class="pro-narrative-content" id="proNarrativeList">
+                        <div class="pro-narrative-item">⏳ กำลังเชื่อมโยงข้อมูลโครงสร้างราคาและแท่งเทียน...</div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Daily Volatility & Energy Budget (Institutional Flow Outlook) -->
+                <div class="pro-section-box pro-energy-box">
+                    <div class="pro-section-header">
+                        <div class="pro-section-title-wrap">
+                            <span class="pro-section-icon">⚡</span>
+                            <span class="pro-section-title">Section 2: Daily Volatility &amp; Energy Budget (Institutional Flow Outlook)</span>
+                        </div>
+                        <span class="pro-energy-level-tag mono" id="proEnergyLevelTag">MODERATE</span>
+                    </div>
+
+                    <!-- Energy Meter / Progress Bar -->
+                    <div class="pro-energy-meter-row">
+                        <div class="pro-energy-meta">
+                            <span>Daily Range: <strong id="proRangeUsed" class="mono text-gold">$0.00</strong> / ADR(14): <strong id="proAdrTotal" class="mono text-gold">$34.00</strong></span>
+                            <span class="pro-session-type-badge" id="proSessionTypeBadge">TYPE B (Compression)</span>
+                        </div>
+                        <div class="pro-energy-track">
+                            <div class="pro-energy-fill" id="proEnergyFill" style="width: 0%;"></div>
+                            <div class="pro-energy-cap-mark" id="proEnergyCapMark" style="display: none;" title="Friday Safe Cap (65%)"></div>
+                        </div>
+                        <div class="pro-energy-footer-row">
+                            <span id="proEnergyUsedPct" class="mono">0% ADR Used</span>
+                            <span id="proEnergyDesc" class="pro-energy-desc-text">ประเมินพลังงานคงเหลือ...</span>
+                        </div>
+                    </div>
+
+                    <!-- Deep Energy Quality & Dynamics Grid -->
+                    <div class="pro-deep-metrics-grid">
+                        <!-- Card 1: Gross Travel -->
+                        <div class="pro-deep-card">
+                            <div class="pro-deep-card-header">
+                                <span class="pro-deep-icon">🧭</span>
+                                <span class="pro-deep-label" id="proGrossTravelLabel">GROSS TRAVEL (4H Active)</span>
+                            </div>
+                            <div class="pro-deep-val-row">
+                                <span id="proGrossTravel" class="mono text-gold font-bold">$0.00</span>
+                                <span class="mono text-slate text-xs">4H Range: <strong id="proActiveRange" class="mono text-gold">$0.00</strong></span>
+                                <span id="proTravelRatio" class="mono mini-tag">0.0x</span>
+                            </div>
+                            <div class="pro-deep-subtext" id="proTravelDesc">วิ่งตรง ไม่สะบัดวนลูป</div>
+                        </div>
+
+                        <!-- Card 2: Flow Efficiency -->
+                        <div class="pro-deep-card">
+                            <div class="pro-deep-card-header">
+                                <span class="pro-deep-icon">🌊</span>
+                                <span class="pro-deep-label">FLOW EFFICIENCY</span>
+                            </div>
+                            <div class="pro-deep-val-row">
+                                <span id="proEerVal" class="mono font-bold text-sky">0% EER</span>
+                                <span id="proKerBadge" class="mini-tag ker-badge">KER 0.50</span>
+                            </div>
+                            <div class="pro-deep-subtext" id="proFlowDesc">ประเมินความสะอาดทิศทาง...</div>
+                        </div>
+
+                        <!-- Card 3: Volatility & Squeeze -->
+                        <div class="pro-deep-card">
+                            <div class="pro-deep-card-header">
+                                <span class="pro-deep-icon">🔋</span>
+                                <span class="pro-deep-label">VOLATILITY &amp; COIL</span>
+                            </div>
+                            <div class="pro-deep-val-row">
+                                <span id="proVolBadge" class="mini-tag vol-state-badge">BALANCED ⚖️</span>
+                                <span class="mono text-slate text-xs">ATR: <strong id="proAtrRatio" class="mono text-gold">1.00x</strong></span>
+                            </div>
+                            <div class="pro-deep-subtext" id="proVolDesc">ประเมินการอัดพลังงาน...</div>
+                        </div>
+                    </div>
+
+                    <!-- Institutional Outlook Text -->
+                    <div class="pro-outlook-box">
+                        <div class="pro-outlook-title">🔮 Institutional Outlook สำหรับเวลาที่เหลือของวัน:</div>
+                        <p class="pro-outlook-desc" id="proOutlookDesc">กำลังคำนวณแนวโน้มการเข้าเทรดของสถาบัน...</p>
+                        <div class="pro-protocol-strip" id="proProtocolStrip">
+                            <span class="pro-protocol-icon" id="proProtocolIcon">🛡️</span>
+                            <span class="pro-protocol-text" id="proProtocolText">Day Protocol: Active</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="app-footer">
+            AI Gold Scalper Web Dashboard • Connected to Local MT5 Terminal • MQL5 Vibe Coding
+        </footer>
+    </div>
+
+    <!-- ═══ Alert Config Modal ═══ -->
+    <div id="alertConfigModal" class="alert-cfg-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="alertCfgTitle">
+        <div class="alert-cfg-card">
+            <div class="alert-cfg-header">
+                <div class="alert-cfg-title-wrap">
+                    <span class="alert-cfg-icon">⚙️</span>
+                    <span id="alertCfgTitle" class="alert-cfg-title">Alert Notification Config</span>
+                </div>
+                <button id="alertConfigCloseBtn" class="alert-cfg-close" aria-label="Close Config">✕</button>
+            </div>
+
+            <p class="alert-cfg-subtitle">เลือกประเภทการแจ้งเตือนที่ต้องการเปิดใช้งาน</p>
+
+            <div class="alert-cfg-list">
+                <!-- Row: Sniper Re-Alignment -->
+                <div class="alert-cfg-row">
+                    <div class="alert-cfg-row-left">
+                        <span class="alert-cfg-badge sniper">🎯 SNIPER</span>
+                        <div class="alert-cfg-info">
+                            <span class="alert-cfg-name">Sniper Re-Alignment Alert</span>
+                            <span class="alert-cfg-desc">เมื่อ Bias &amp; Executive Decision สอดคล้องกัน (จังหวะจบการย่อตัว — Golden Setup)</span>
+                        </div>
+                    </div>
+                    <label class="alert-cfg-toggle">
+                        <input type="checkbox" id="cfgToggleSniper" checked>
+                        <span class="alert-cfg-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Row: Significant Pullback -->
+                <div class="alert-cfg-row">
+                    <div class="alert-cfg-row-left">
+                        <span class="alert-cfg-badge pullback">⚠️ PULLBACK</span>
+                        <div class="alert-cfg-info">
+                            <span class="alert-cfg-name">Significant Pullback Alert</span>
+                            <span class="alert-cfg-desc">เมื่อ Executive Decision สวนทางกับ Bias ใหญ่ (การย่อตัวมีนัยสำคัญ)</span>
+                        </div>
+                    </div>
+                    <label class="alert-cfg-toggle">
+                        <input type="checkbox" id="cfgTogglePullback" checked>
+                        <span class="alert-cfg-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Row: Standard Signal -->
+                <div class="alert-cfg-row">
+                    <div class="alert-cfg-row-left">
+                        <span class="alert-cfg-badge standard">⚡ STANDARD</span>
+                        <div class="alert-cfg-info">
+                            <span class="alert-cfg-name">Standard Signal Alert</span>
+                            <span class="alert-cfg-desc">คำสั่ง BUY/SELL ในสภาวะ Bias เป็น Neutral หรือ Choppy</span>
+                        </div>
+                    </div>
+                    <label class="alert-cfg-toggle">
+                        <input type="checkbox" id="cfgToggleStandard" checked>
+                        <span class="alert-cfg-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Row: MTF Consensus -->
+                <div class="alert-cfg-row">
+                    <div class="alert-cfg-row-left">
+                        <span class="alert-cfg-badge mtf">📊 MTF</span>
+                        <div class="alert-cfg-info">
+                            <span class="alert-cfg-name">MTF Consensus Alert</span>
+                            <span class="alert-cfg-desc">เมื่อ H1, M15, M5, M1 ทุก Timeframe มี Regime ตรงกันพร้อมกัน 4/4</span>
+                        </div>
+                    </div>
+                    <label class="alert-cfg-toggle">
+                        <input type="checkbox" id="cfgToggleMtf" checked>
+                        <span class="alert-cfg-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="alert-cfg-footer">
+                <span id="alertCfgStatus" class="alert-cfg-status">✅ บันทึกอัตโนมัติ</span>
+                <div class="alert-cfg-footer-actions">
+                    <button id="alertCfgDisableAll" class="btn-cfg-all off">ปิดทั้งหมด</button>
+                    <button id="alertCfgEnableAll" class="btn-cfg-all on">เปิดทั้งหมด</button>
+                    <button id="alertConfigDoneBtn" class="btn-cfg-done">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Executive Signal Alert Modal Dialog -->
+    <div id="signalAlertModal" class="alert-modal-backdrop" style="display: none;">
+        <div class="alert-modal-card" id="alertModalCard" role="dialog" aria-modal="true" aria-labelledby="modalSignalText">
+            <button id="alertModalCloseBtn" class="alert-modal-close" aria-label="Close Alert">&times;</button>
+            
+            <div class="alert-modal-header">
+                <div class="alert-modal-tag" id="modalAlertTag">
+                    <span class="alert-pulse-dot" id="modalPulseDot"></span>
+                    <span id="modalAlertTagText">EXECUTIVE DECISION DETECTED</span>
+                </div>
+                <div class="alert-time-tag mono" id="modalAlertTime">--:--:--</div>
+            </div>
+
+            <div id="modalSignalHero" class="modal-signal-hero buy">
+                <div class="modal-signal-left">
+                    <span class="modal-signal-icon" id="modalSignalIcon">▲</span>
+                    <div class="modal-signal-info">
+                        <span class="modal-signal-text" id="modalSignalText">BUY SIGNAL DETECTED</span>
+                        <span class="modal-signal-symbol" id="modalSignalSymbol">XAUUSD • M5</span>
+                        <span class="modal-signal-sub" id="modalSignalSub" style="display:none; font-size:0.8rem; margin-top:3px; font-weight:500;"></span>
+                    </div>
+                </div>
+                <div class="modal-confidence-box">
+                    <span class="modal-confidence-label">CONFIDENCE</span>
+                    <strong class="modal-confidence-val mono" id="modalConfidenceVal">85%</strong>
+                </div>
+            </div>
+
+            <div class="modal-metrics-grid">
+                <div class="modal-metric-item">
+                    <span class="modal-metric-label">ENTRY PRICE</span>
+                    <strong class="modal-metric-value mono text-gold" id="modalEntryPrice">$0.00</strong>
+                </div>
+                <div class="modal-metric-item">
+                    <span class="modal-metric-label">STOP LOSS (SL)</span>
+                    <strong class="modal-metric-value mono text-red" id="modalSlPrice">$0.00</strong>
+                </div>
+                <div class="modal-metric-item">
+                    <span class="modal-metric-label">TAKE PROFIT (TP1)</span>
+                    <strong class="modal-metric-value mono text-green" id="modalTpPrice">$0.00</strong>
+                </div>
+                <div class="modal-metric-item">
+                    <span class="modal-metric-label">RISK : REWARD</span>
+                    <strong class="modal-metric-value mono" id="modalRrRatio">1:1.5</strong>
+                </div>
+            </div>
+
+            <div class="modal-reason-box">
+                <div class="modal-reason-title">
+                    <span>🧠 AI Ensemble Analysis:</span>
+                    <span id="modalRegimeBadge" class="modal-regime-pill">TRENDING UP</span>
+                    <span id="modalAlignmentBadge" class="modal-regime-pill" style="display:none; margin-left:6px;"></span>
+                </div>
+                <p id="modalReasonText" class="modal-reason-text">Analyzing market conditions...</p>
+            </div>
+
+            <div class="modal-actions">
+                <button id="modalFocusChartBtn" class="btn-modal-chart" type="button">
+                    <span>📊 ดูกราฟ (Focus Chart)</span>
+                </button>
+                <button id="modalAckBtn" class="btn-modal-ack" type="button">
+                    <span>ตกลง / รับทราบ (Acknowledge)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MTF Alignment Alert Modal -->
+    <div id="mtfAlertModal" class="alert-modal-backdrop" style="display: none;">
+        <div class="alert-modal-card mtf-modal-card" id="mtfAlertCard" role="dialog" aria-modal="true" aria-labelledby="mtfModalTitle">
+            <button id="mtfModalCloseBtn" class="alert-modal-close" aria-label="Close MTF Alert">&times;</button>
+
+            <div class="alert-modal-header">
+                <div class="alert-modal-tag mtf-alert-tag">
+                    <span class="alert-pulse-dot"></span>
+                    <span>MTF ALIGNMENT DETECTED</span>
+                </div>
+                <div class="alert-time-tag mono" id="mtfModalTime">--:--:--</div>
+            </div>
+
+            <div id="mtfModalHero" class="modal-signal-hero buy">
+                <div class="modal-signal-left">
+                    <span class="modal-signal-icon" id="mtfModalIcon">▲</span>
+                    <div class="modal-signal-info">
+                        <span class="modal-signal-text" id="mtfModalTitle">BULLISH ALIGNMENT</span>
+                        <span class="modal-signal-symbol" id="mtfModalSymbol">XAUUSD • H1+M15+M5+M1</span>
+                    </div>
+                </div>
+                <div class="modal-confidence-box">
+                    <span class="modal-confidence-label">ALIGNED TFs</span>
+                    <strong class="modal-confidence-val mono" id="mtfModalTfCount">4/4</strong>
+                </div>
+            </div>
+
+            <div class="modal-reason-box" style="margin-top: 16px;">
+                <div class="modal-reason-title">
+                    <span>📊 Multi-Timeframe Alignment:</span>
+                    <span id="mtfModalRegimePill" class="modal-regime-pill">TRENDING UP</span>
+                </div>
+                <div id="mtfModalTfList" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;"></div>
+                <p id="mtfModalReasonText" class="modal-reason-text" style="margin-top:10px;">
+                    All short-term timeframes aligned in the same direction — high-probability momentum window.
+                </p>
+            </div>
+
+            <div class="modal-actions">
+                <button id="mtfModalFocusBtn" class="btn-modal-chart" type="button">
+                    <span>📊 ดูกราฟ (Focus Chart)</span>
+                </button>
+                <button id="mtfModalAckBtn" class="btn-modal-ack" type="button">
+                    <span>ตกลง / รับทราบ (Acknowledge)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=2.3.1"></script>
+    <script src="/static/js/chart.js?v=1.1.0"></script>
+</body>
+</html>

@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Gold Scalper — 9+ Ensemble Models Deep Dive & Choppy Market Filter</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #080c14;
+            --bg-secondary: #0f172a;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --bg-card-hover: rgba(30, 41, 59, 0.85);
+            --border: rgba(51, 65, 85, 0.6);
+            --border-highlight: rgba(56, 189, 248, 0.4);
+            
+            --gold: #f59e0b;
+            --gold-glow: rgba(245, 158, 11, 0.25);
+            --cyan: #38bdf8;
+            --cyan-glow: rgba(56, 189, 248, 0.25);
+            --green: #10b981;
+            --green-glow: rgba(16, 185, 129, 0.2);
+            --red: #f43f5e;
+            --red-glow: rgba(244, 63, 94, 0.2);
+            --purple: #a855f7;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            
+            --font-sans: 'Prompt', 'Outfit', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(245, 158, 11, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 85% 35%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 50% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1380px;
+            margin: 0 auto;
+            padding: 32px 24px 80px 24px;
+        }
+
+        /* Header / Hero */
+        .hero {
+            position: relative;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(11, 15, 25, 0.95) 100%);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 32px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(12px);
+        }
+
+        .hero::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold), var(--cyan), var(--green), var(--purple));
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 30px;
+            color: var(--gold);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .hero h1 {
+            font-size: 2.3rem;
+            font-weight: 800;
+            line-height: 1.25;
+            color: #ffffff;
+            margin-bottom: 14px;
+            background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p.lead {
+            font-size: 1.05rem;
+            color: var(--text-muted);
+            max-width: 960px;
+            font-weight: 300;
+            margin-bottom: 24px;
+        }
+
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 20px;
+        }
+
+        .hero-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hero-meta-item span.val {
+            color: var(--cyan);
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        /* Navigation Tabs */
+        .tabs-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+            position: sticky;
+            top: 16px;
+            z-index: 50;
+            background: rgba(8, 12, 20, 0.85);
+            backdrop-filter: blur(16px);
+            padding: 10px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .tab-btn {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-family: var(--font-sans);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            background: rgba(30, 41, 59, 0.8);
+            color: #ffffff;
+            border-color: var(--border-highlight);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.08) 100%);
+            border-color: var(--gold);
+            color: #fbbf24;
+            font-weight: 600;
+            box-shadow: 0 0 15px var(--gold-glow);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Card Elements */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-subtitle {
+            font-size: 0.88rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Model Cards */
+        .model-card {
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.7) 0%, rgba(11, 15, 25, 0.9) 100%);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s ease;
+        }
+
+        .model-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--cyan);
+            box-shadow: 0 12px 25px -10px rgba(56, 189, 248, 0.2);
+        }
+
+        .model-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--text-dim);
+        }
+
+        .model-card.ml::before { background: var(--cyan); }
+        .model-card.ensemble::before { background: var(--gold); }
+        .model-card.heuristic::before { background: var(--green); }
+
+        .model-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .model-name {
+            font-size: 1.12rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .model-type-tag {
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        .tag-tree { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .tag-linear { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .tag-nn { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .tag-rule { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+        .model-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            min-height: 48px;
+        }
+
+        .model-props {
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 14px;
+            font-size: 0.82rem;
+            font-family: var(--font-mono);
+        }
+
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.82rem;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 12px;
+        }
+
+        .pro-item {
+            color: #34d399;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .con-item {
+            color: #fb7185;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        /* Tables */
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            margin: 16px 0;
+            background: rgba(11, 15, 25, 0.6);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .styled-table th {
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--cyan);
+            font-weight: 600;
+            text-align: left;
+            padding: 14px 18px;
+            border-bottom: 2px solid var(--border);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        .styled-table td {
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            vertical-align: middle;
+        }
+
+        .styled-table tr:hover td {
+            background: rgba(30, 41, 59, 0.4);
+        }
+
+        /* Flow / Decision Tree Box */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+            padding: 10px 0;
+        }
+
+        .flow-step {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: border-color 0.2s;
+        }
+
+        .flow-step:hover {
+            border-color: var(--cyan);
+        }
+
+        .flow-num {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            flex-shrink: 0;
+        }
+
+        .flow-content {
+            flex-grow: 1;
+        }
+
+        .flow-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+
+        .flow-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+        }
+
+        /* Choppiness Edge Simulator Widget */
+        .sim-box {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-top: 24px;
+        }
+
+        .sim-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .sim-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .sim-control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sim-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .sim-label span.val {
+            color: var(--cyan);
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        .sim-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #334155;
+            outline: none;
+        }
+
+        .sim-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--gold);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--gold-glow);
+        }
+
+        .sim-result {
+            background: rgba(11, 15, 25, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .sim-status {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .status-pill {
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: var(--font-mono);
+        }
+
+        .pill-safe {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .pill-danger {
+            background: rgba(244, 63, 94, 0.2);
+            color: #fb7185;
+            border: 1px solid rgba(244, 63, 94, 0.5);
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+        }
+
+        .pill-neutral {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.5);
+        }
+
+        /* Tactical Matrix Table & Alert Mode Badges */
+        .tactical-table {
+            width: 100%;
+            min-width: 840px;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.86rem;
+            text-align: left;
+        }
+        .tactical-table th {
+            padding: 12px 16px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.12);
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .tactical-table td {
+            padding: 12px 16px;
+            vertical-align: middle;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .tactical-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            font-family: var(--font-mono, monospace);
+            line-height: 1.3;
+            box-sizing: border-box;
+        }
+        .tactical-badge.badge-sniper-buy {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+        }
+        .tactical-badge.badge-sniper-sell {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.15);
+        }
+        .tactical-badge.badge-pullback {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.12);
+        }
+        .tactical-badge.badge-notrade {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.12);
+        }
+
+        .sim-detail {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            max-width: 580px;
+        }
+
+        /* Highlight Boxes */
+        .callout {
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 20px 0;
+            border-left: 4px solid;
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        .callout.gold {
+            border-left-color: var(--gold);
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.08) 0%, transparent 100%);
+        }
+
+        .callout.cyan {
+            border-left-color: var(--cyan);
+            background: linear-gradient(90deg, rgba(56, 189, 248, 0.08) 0%, transparent 100%);
+        }
+
+        .callout.red {
+            border-left-color: var(--red);
+            background: linear-gradient(90deg, rgba(244, 63, 94, 0.08) 0%, transparent 100%);
+        }
+
+        .callout.green {
+            border-left-color: var(--green);
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+        }
+
+        .callout-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            font-size: 1rem;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Code snippets */
+        pre.code-block {
+            background: #090d16;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            overflow-x: auto;
+            line-height: 1.5;
+            margin: 14px 0;
+        }
+
+        .code-keyword { color: #f43f5e; font-weight: 600; }
+        .code-func { color: #38bdf8; }
+        .code-comment { color: #64748b; font-style: italic; }
+        .code-num { color: #fbbf24; }
+        .code-str { color: #34d399; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+        .badge-buy { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .badge-sell { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .badge-hold { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+
+        /* Checklist */
+        .check-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .check-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 0.95rem;
+            color: var(--text-main);
+        }
+
+        .check-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            color: #34d399;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header class="hero">
+        <div class="hero-badge">
+            ⚡ Architectural & Quantitative Analysis
+        </div>
+        <h1>รายงานวิเคราะห์กลไก 9+ Ensemble Models Voting Breakdown</h1>
+        <p class="lead">
+            การทำงานเชิงลึกของ 9 โมเดลคณิตศาสตร์และการรวมเสียงฉันทามติ (Ensemble Consensus), จุดแข็งจุดอ่อน, พร้อมกลยุทธ์การออกแบบตัวกรองสภาวะตลาด <strong>Choppy Market Filter</strong> เพื่อคัดแยกตลาดไร้ทิศทาง และสร้างความได้เปรียบสูงสุด (Trading Edge) ในการเทรด Price Action & Price Pattern บนทองคำ (XAU/USD)
+        </p>
+        <div class="hero-meta">
+            <div class="hero-meta-item">🎯 System: <span class="val">AI Gold Scalper (v6.1.1 Engine)</span></div>
+            <div class="hero-meta-item">📊 Execution TF: <span class="val">M5 / M1 (Multitimeframe Gate)</span></div>
+            <div class="hero-meta-item">🔬 Target Asset: <span class="val">XAU/USD (Gold)</span></div>
+            <div class="hero-meta-item">🛡️ Focus Core: <span class="val">Choppy Filter & Price Action Edge</span></div>
+            <div class="hero-meta-item">🕒 Version: <span class="val">September 2026 Edition</span></div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-nav" id="reportTabs">
+        <button class="tab-btn active" onclick="switchTab('tab-pipeline')">1. สถาปัตยกรรม & Pipeline</button>
+        <button class="tab-btn" onclick="switchTab('tab-models')">2. เจาะลึก 9 Models</button>
+        <button class="tab-btn" onclick="switchTab('tab-voting')">3. กลไกการโหวต & Gating</button>
+        <button class="tab-btn" onclick="switchTab('tab-regimes')">4. สภาวะตลาด & ประสิทธิภาพ</button>
+        <button class="tab-btn" onclick="switchTab('tab-choppy')">5. 🛡️ กลไกกรองตลาด Choppy</button>
+        <button class="tab-btn" onclick="switchTab('tab-playbook')">6. แผนประยุกต์ใช้ & Edge</button>
+    </nav>
+
+    <!-- ==================== TAB 1: PIPELINE & ARCHITECTURE ==================== -->
+    <div id="tab-pipeline" class="tab-content active">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">🔬 ภาพรวมของ Pipeline การประมวลผลข้อมูล</h2>
+                    <div class="card-subtitle">จากการดึงข้อมูลบาร์ราคา MT5 สู่การแปลงฟีเจอร์ 12 มิติ และการเทรนโมเดลแบบ Rolling Window</div>
+                </div>
+            </div>
+
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                ระบบไม่ได้ใช้โมเดลที่เทรนแบบตายตัว (Static Frozen Model) แต่ใช้เทคนิค <strong>Fast Rolling Walk-Forward Inference</strong> ซึ่งดึงข้อมูล Closed Bars จาก MT5 แล้วสกัดฟีเจอร์ทางเทคนิค 12 ตัว จากนั้นทำการสร้าง Label แบบ Supervised Learning ตามผลลัพธ์ล่วงหน้า 3 แท่ง แล้วเทรนโมเดลสดใหม่ทันทีบนหน่วยความจำ เพื่อนำแท่งเทียนปัจจุบันเข้าทำนาย
+            </p>
+
+            <div class="flow-container">
+                <div class="flow-step">
+                    <div class="flow-num">1</div>
+                    <div class="flow-content">
+                        <div class="flow-title">Closed-Bar Multi-Timeframe Ingestion</div>
+                        <div class="flow-desc">ดึงแท่งเทียนที่ปิดสมบูรณ์แล้วจาก MT5 ใน 6 ไทม์เฟรม (D1, H4, H1, M15, M5, M1) เพื่อป้องกันปรากฏการณ์ Repainting หรือข้อมูลกระพริบระหว่างแท่ง</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num">2</div>
+                    <div class="flow-content">
+                        <div class="flow-title">12 Gold-Specific Quantitative Features Extraction</div>
+                        <div class="flow-desc">คำนวณเวกเตอร์ 12 ตัวแปรที่ผ่านการ Calibrate ให้เหมาะกับพฤติกรรมทองคำโดยเฉพาะ (Dynamic ATR Normalization, Candlestick Anatomy, Volume Flow)</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num">3</div>
+                    <div class="flow-content">
+                        <div class="flow-title">Supervised Labeling with Volatility Barrier (ATR Filter)</div>
+                        <div class="flow-desc">
+                            มองไปข้างหน้า 3 แท่ง (<code style="color:var(--cyan)">forward_bars = 3</code>) คำนวณผลตอบแทนล่วงหน้าเทียบกับเกณฑ์ <code style="color:var(--gold)">threshold = ATR * 0.6</code>:
+                            <br>• หากกำไรพุ่งเกิน <strong>+0.6 ATR</strong> &rarr; Label <span class="badge badge-buy">1 (BUY)</span>
+                            <br>• หากราคาร่วงเกิน <strong>-0.6 ATR</strong> &rarr; Label <span class="badge badge-sell">-1 (SELL)</span>
+                            <br>• หากแกว่งแคบอยู่ในกรอบ &plusmn;0.6 ATR &rarr; Label <span class="badge badge-hold">0 (HOLD / Noise)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num">4</div>
+                    <div class="flow-content">
+                        <div class="flow-title">Parallel 9-Model Training & Instant Inference</div>
+                        <div class="flow-desc">ใช้ StandardScaler ปรับข้อมูล แล้วส่งเข้า 7 อัลกอริทึม Machine Learning + 2 กฎเชิงปริมาณเฉพาะทาง (Heuristic Engines) เพื่อรวบรวมมติ 9 เสียง</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num">5</div>
+                    <div class="flow-content">
+                        <div class="flow-title">Regime Gating & Dynamic TP/SL Assignment</div>
+                        <div class="flow-desc">นำมติที่ได้มาผ่านตัวกรอง Market Regime (ADX + EMA Slope + Volatility Ratio) เพื่อคัดกรองสัญญาณขัดแย้ง และกำหนดจุด Take Profit / Stop Loss แบบ Dynamic ตามค่า ATR ปัจจุบัน</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">📊 โครงสร้างฟีเจอร์ทั้ง 12 ตัว (Feature Space)</h3>
+                    <div class="card-subtitle">ออกแบบมาเพื่อจับมิติของ Momentum, Volatility, Price Action และ Volume Surge พร้อมกัน</div>
+                </div>
+            </div>
+
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th>Feature Name</th>
+                        <th>คณิตศาสตร์ / วิธีคำนวณ</th>
+                        <th>มิติที่ต้องการวัด (Market Dimension)</th>
+                        <th>บทบาทในตลาดทองคำ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code style="color:var(--cyan)">rsi_14</code> / <code style="color:var(--cyan)">rsi_7</code></td>
+                        <td>RSI 14 และ 7 บาร์ (Wilder's Smoothing)</td>
+                        <td>Dual-Speed Momentum</td>
+                        <td>เปรียบเทียบโมเมนตัมระยะสั้นมาก (7) กับระยะกลาง (14) เพื่อดูการเร่งตัวของคลื่น</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--cyan)">macd_diff</code></td>
+                        <td>MACD Line (EMA12 - EMA26) - Signal Line (EMA9)</td>
+                        <td>Trend Divergence & Acceleration</td>
+                        <td>บอกการกลับตัวของโมเมนตัมแนวโน้มก่อนที่ราคาเฉลี่ยระยะยาวจะเปลี่ยนทิศ</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--cyan)">bb_pos</code></td>
+                        <td>(Close - LowerBB) / (UpperBB - LowerBB)</td>
+                        <td>Relative Range Position</td>
+                        <td>ตำแหน่งสัมพัทธ์ของราคาในกรอบ 2 Standard Deviations (0.0 = แนวรับ, 1.0 = แนวต้าน)</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--cyan)">stoch_k</code></td>
+                        <td>100 * (Close - Low14) / (High14 - Low14)</td>
+                        <td>Fast Oscillator Overbought/Oversold</td>
+                        <td>บอกความตึงตัวของราคาเมื่อเข้าใกล้ High/Low รอบ 14 บาร์</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--cyan)">atr14</code></td>
+                        <td>Rolling Mean ของ True Range (14 บาร์)</td>
+                        <td>Market Volatility Normalizer</td>
+                        <td>เป็นตัวหาร (Denominator) เพื่อปรับสเกลของโมเมนตัมและระยะห่างไม่ให้ลำเอียงตามราคา</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--gold)">ema_diff_atr</code></td>
+                        <td>(EMA9 - EMA21) / ATR14</td>
+                        <td>Volatility-Adjusted Trend Gap</td>
+                        <td><strong>ฟีเจอร์สำคัญ:</strong> วัดว่าระยะห่างเส้นค่าเฉลี่ยวิ่งฉีกออกห่างจากกันกี่เท่าของ ATR</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--green)">candle_body</code></td>
+                        <td>(Close - Open) / (High - Low + &epsilon;)</td>
+                        <td>Price Action: Net Bull/Bear Pressure</td>
+                        <td><strong>Price Action Metric:</strong> วัดขนาดเนื้อเทียนเทียบกับความยาวทั้งแท่ง (-1.0 ถึง +1.0)</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--green)">upper_shadow</code></td>
+                        <td>(High - max(Close, Open)) / (High - Low + &epsilon;)</td>
+                        <td>Price Action: Selling Rejection Wick</td>
+                        <td>วัดความยาวไส้เทียนด้านบน เพื่อจับพฤติกรรม Reject แนวต้าน (Pinbar / Shooting Star)</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--green)">lower_shadow</code></td>
+                        <td>(min(Close, Open) - Low) / (High - Low + &epsilon;)</td>
+                        <td>Price Action: Buying Rejection Wick</td>
+                        <td>วัดความยาวไส้เทียนด้านล่าง เพื่อจับพฤติกรรม Reject แนวรับ (Hammer / Spring)</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--cyan)">mom_3</code> / <code style="color:var(--cyan)">mom_5</code></td>
+                        <td>(Close - Close[n]) / ATR14</td>
+                        <td>Short-Term Normalized Velocity</td>
+                        <td>ความเร็วในการเคลื่อนที่ของราคาใน 3 และ 5 แท่งล่าสุด ปรับตามความผันผวน</td>
+                    </tr>
+                    <tr>
+                        <td><code style="color:var(--purple)">vol_ratio</code></td>
+                        <td>TickVolume / Volume.rolling(20).mean()</td>
+                        <td>Liquidity Burst & Volume Expansion</td>
+                        <td>วัดการกระชากของสภาพคล่อง ถ้า > 1.5 หมายถึงสถาบันหรือผู้เล่นใหญ่เริ่มเข้ามาร่วมวง</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 2: 9 MODELS DEEP DIVE ==================== -->
+    <div id="tab-models" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">🤖 เจาะลึก 9 อัลกอริทึม (Model Architecture Deep Dive)</h2>
+                    <div class="card-subtitle">วิเคราะห์หลักการคณิตศาสตร์ พฤติกรรมในตลาดทองคำ ข้อดีและข้อด้อยของแต่ละโมเดล</div>
+                </div>
+            </div>
+
+            <div class="grid-3">
+                <!-- 1. Random Forest -->
+                <div class="model-card ensemble">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">1. Random Forest</span>
+                            <span class="model-type-tag tag-tree">Bagging Trees</span>
+                        </div>
+                        <div class="model-desc">
+                            ใช้อาร์เรย์ของ Decision Trees 40 ต้น (Max Depth 5) สร้างขึ้นจากการสุ่มแถวข้อมูล (Bootstrap) และสุ่ม Subset ของฟีเจอร์ เพื่อหาฉันทามติจากการโหวต
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • n_estimators: 40<br>
+                            • max_depth: 5<br>
+                            • criteria: Gini Impurity
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ ทนทานต่อ Noise สูงมาก</div>
+                            <div class="pro-item">✓ จับความสัมพันธ์ Non-linear ได้ดี</div>
+                            <div class="pro-item">✓ ไม่ Overfit กับ Spike สั้นๆ</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ ปรับตัวช้าเมื่อเปลี่ยน Regime ทันที</div>
+                            <div class="con-item">✗ มีแนวโน้มโหวต HOLD บ่อยในตลาดเงียบ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Gradient Boosting -->
+                <div class="model-card ensemble">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">2. Gradient Boosting</span>
+                            <span class="model-type-tag tag-tree">Sequential Boosting</span>
+                        </div>
+                        <div class="model-desc">
+                            สร้าง Shallow Trees 35 ต้น (Max Depth 3) แบบอนุกรม โดยแต่ละต้นมุ่งลดทอน Residual Error ของต้นก่อนหน้าผ่านอัลกอริทึม Gradient Descent
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • n_estimators: 35<br>
+                            • max_depth: 3<br>
+                            • learning_rate: 0.1
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ แม่นยำสูงสุดในการหา Edge</div>
+                            <div class="pro-item">✓ จับจุดกลับตัวระดับ Micro ได้ไว</div>
+                            <div class="pro-item">✓ ให้น้ำหนักเคสที่ทำนายยาก</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ ไวต่อ Outlier และ False Breakout</div>
+                            <div class="con-item">✗ เสี่ยง Overfit สูงหากตลาดไม่มีเทรนด์</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Extra Trees -->
+                <div class="model-card ensemble">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">3. Extra Trees</span>
+                            <span class="model-type-tag tag-tree">Randomized Trees</span>
+                        </div>
+                        <div class="model-desc">
+                            Extremely Randomized Trees (35 ต้น, Depth 5) แตกต่างจาก Random Forest ตรงที่จุดแบ่งกิ่ง (Split Cutoffs) ถูกสุ่มเลือก 100% แทนที่จะหา Best Split
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • n_estimators: 35<br>
+                            • max_depth: 5<br>
+                            • split: Pure Random Threshold
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ ลด Variance ได้ยอดเยี่ยม</div>
+                            <div class="pro-item">✓ ประมวลผลรวดเร็วมาก</div>
+                            <div class="pro-item">✓ กรอง Noise ย่อยใน M5 ได้ดี</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ เส้นแบ่งการตัดสินใจจะมน/กว้าง</div>
+                            <div class="con-item">✗ อาจให้สัญญาณช้ากว่า 1 แท่ง</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Support Vector Classifier (SVC) -->
+                <div class="model-card ml">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">4. Support Vector (SVC)</span>
+                            <span class="model-type-tag tag-linear">RBF Hyperplane</span>
+                        </div>
+                        <div class="model-desc">
+                            แปลงข้อมูลขึ้นสู่มิติไร้ขอบเขตผ่าน RBF Kernel เพื่อค้นหาระนาบแยก (Hyperplane) ที่มีระยะห่างจาก Support Vectors กว้างที่สุด
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • kernel: 'rbf'<br>
+                            • C: 1.0 (Regularization)<br>
+                            • gamma: 'scale'
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ ทรงพลังในพื้นที่หลายมิติ</div>
+                            <div class="pro-item">✓ แข็งแกร่งต่อฟีเจอร์ที่ไม่เกี่ยวข้อง</div>
+                            <div class="pro-item">✓ เส้นแบ่งมีความแน่นอนสูง</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ อ่อนไหวต่อสเกลของราคา</div>
+                            <div class="con-item">✗ คำนวณช้าหากบาร์ข้อมูลมากเกินไป</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. K-Nearest Neighbors (KNN) -->
+                <div class="model-card ml">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">5. KNN (K-Neighbors)</span>
+                            <span class="model-type-tag tag-linear">Instance Memory</span>
+                        </div>
+                        <div class="model-desc">
+                            ค้นหาแท่งเทียนในอดีต 7 แท่งที่มีค่า Technical Features 12 ตัวใกล้เคียงกับแท่งปัจจุบันมากที่สุด (Euclidean Distance) แล้วโหวตตามเสียงข้างมาก
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • n_neighbors: min(7, len)<br>
+                            • metric: Euclidean<br>
+                            • weights: Uniform
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ เป็นตัวจำ Fractal รูปแบบอดีต</div>
+                            <div class="pro-item">✓ ไม่มีสมมติฐานรูปแบบข้อมูล</div>
+                            <div class="pro-item">✓ สะท้อนพฤติกรรมซ้ำๆ ของมนุษย์</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ แพ้ทางเมื่อราคาทะลุ All-Time High</div>
+                            <div class="con-item">✗ เสียหายเมื่อเจอภาวะที่ไม่เคยเกิดมาก่อน</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Logistic Regression -->
+                <div class="model-card ml">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">6. Logistic Regression</span>
+                            <span class="model-type-tag tag-linear">Linear Probability</span>
+                        </div>
+                        <div class="model-desc">
+                            โมเดลเชิงเส้นพื้นฐานที่คำนวณผลรวมถ่วงน้ำหนักของฟีเจอร์ทั้งหมดแล้วส่งผ่านฟังก์ชัน Sigmoid/Softmax เพื่อหาความน่าจะเป็นของทิศทาง
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • max_iter: 300<br>
+                            • solver: lbfgs<br>
+                            • penalty: L2 Ridge
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ เป็น Linear Sanity Check ชั้นดี</div>
+                            <div class="pro-item">✓ ไม่ Overfit กับฟลุ๊กแพทเทิร์น</div>
+                            <div class="pro-item">✓ ทำงานเร็วและเสถียรที่สุด</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ มองไม่เห็นความสัมพันธ์โค้งงอ</div>
+                            <div class="con-item">✗ ล้มเหลวกับรูปแบบ Squeeze บีบกรอบ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Neural Network (MLP) -->
+                <div class="model-card nn">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">7. Neural Network (MLP)</span>
+                            <span class="model-type-tag tag-nn">Deep MLP</span>
+                        </div>
+                        <div class="model-desc">
+                            โครงข่ายประสาทเทียมแบบ Multi-Layer Perceptron ขนาด 2 Hidden Layers (32 และ 16 นิวรอน) เชื่อมโยงฟีเจอร์เพื่อสร้าง Abstract Representation
+                        </div>
+                        <div class="model-props">
+                            <strong>Parameters:</strong><br>
+                            • layers: (32, 16)<br>
+                            • activation: ReLU<br>
+                            • optimizer: Adam (max 300)
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ Universal Function Approximator</div>
+                            <div class="pro-item">✓ ผสาน Volume + PA + Trend ร่วมกัน</div>
+                            <div class="pro-item">✓ ฉลาดในการจับโครงสร้างระดับลึก</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ เป็น Black Box ตรวจสอบเหตุผลยาก</div>
+                            <div class="con-item">✗ ถ้าข้อมูลน้อย (100 บาร์) เสี่ยง Overfit</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. Gold Trend Heuristic Engine -->
+                <div class="model-card heuristic">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">8. Gold Trend Engine</span>
+                            <span class="model-type-tag tag-rule">Expert Rules</span>
+                        </div>
+                        <div class="model-desc">
+                            กฎระบบเทรนเฉพาะทางสำหรับทองคำ: ตรวจสอบความสอดคล้องของ EMA Gap, RSI โมเมนตัม และทิศทาง MACD Diff พร้อมกัน
+                        </div>
+                        <div class="model-props">
+                            <strong>Logic:</strong><br>
+                            • BUY: ema_gap > 0.15 & rsi > 52 & macd > 0<br>
+                            • SELL: ema_gap < -0.15 & rsi < 48 & macd < 0
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ สอดคล้องกับ Momentum Persistence</div>
+                            <div class="pro-item">✓ ไม่ต้องรอการ Train ตัดสินใจทันที</div>
+                            <div class="pro-item">✓ รันกำไรก้อนใหญ่ในเทรนด์แรงได้ดี</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ เกิด Whipsaw ขาดทุนติดๆ กันในกรอบแคบ</div>
+                            <div class="con-item">✗ ให้สัญญาณช้าตอนราคากำลังกลับตัว</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. Gold Mean-Reversion Heuristic Engine -->
+                <div class="model-card heuristic">
+                    <div>
+                        <div class="model-header">
+                            <span class="model-name">9. Gold Mean-Reversion</span>
+                            <span class="model-type-tag tag-rule">Contrarian Rules</span>
+                        </div>
+                        <div class="model-desc">
+                            กฎสวนการยืดตัวสุดขั้ว: ดักจับจุดที่ราคาหลุดทะลุกรอบ Bollinger Bands พร้อมกับค่า Stochastic อยู่ในโซน Overbought/Oversold จัด
+                        </div>
+                        <div class="model-props">
+                            <strong>Logic:</strong><br>
+                            • BUY: bb_pos < 0.12 & stoch_k < 20<br>
+                            • SELL: bb_pos > 0.88 & stoch_k > 80
+                        </div>
+                    </div>
+                    <div class="pros-cons">
+                        <div>
+                            <strong>ข้อดี:</strong>
+                            <div class="pro-item">✓ ได้ราคาต้นทุนที่ดีมาก (ยอดดอย/ก้นเหว)</div>
+                            <div class="pro-item">✓ ทำงานดีเลิศในตลาด Ranging Sideway</div>
+                            <div class="pro-item">✓ มี Risk:Reward สูงลิ่ว</div>
+                        </div>
+                        <div>
+                            <strong>ข้อด้อย:</strong>
+                            <div class="con-item">✗ อันตรายร้ายแรงใน Super Strong Trend</div>
+                            <div class="con-item">✗ เสี่ยง "รับมีดที่กำลังตก" ในแท่งข่าวแรง</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 3: VOTING & GATING ==================== -->
+    <div id="tab-voting" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">⚖️ กลไกการโหวต & การควบคุมลำดับสิทธิ์ (Gating Hierarchy)</h2>
+                    <div class="card-subtitle">ทำความเข้าใจว่าทั้ง 9 เสียงถูกนำมารวมและคัดกรองอย่างไรก่อนออกมาเป็น Executive Signal</div>
+                </div>
+            </div>
+
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                จุดเด่นของระบบ Ensemble ใน AI Gold Scalper ไม่ใช่แค่การนับเสียงส่วนใหญ่ทั่วไป (Simple Majority Voting) แต่มี <strong>Market Regime Supervisor</strong> คอยคุมสิทธิ์การออกสัญญาณเพื่อป้องกันข้อผิดพลาดร้ายแรงของโมเดลแต่ละสาย:
+            </p>
+
+            <div class="callout cyan">
+                <div class="callout-title">💡 สูตรคำนวณความเชื่อมั่น (Confidence Calculation)</div>
+                <pre class="code-block" style="margin: 8px 0 0 0;">
+dominant_votes = max(buy_votes, sell_votes, hold_votes)
+confidence = round((dominant_votes / total_models) * 100, 1)
+                </pre>
+                <div style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">
+                    เช่น หากมีโหวต BUY 6 เสียง จาก 9 เสียง &rarr; Confidence = (6 / 9) * 100 = <strong>66.7%</strong>
+                </div>
+            </div>
+
+            <h3 style="color:#ffffff; margin: 24px 0 14px 0; font-size:1.15rem;">🛡️ ลำดับขั้นการตัดสินใจ (Decision Flowchart Priority)</h3>
+
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">ลำดับ (Priority)</th>
+                        <th>เงื่อนไขการตรวจสอบ (Condition Trigger)</th>
+                        <th style="width: 130px;">ผลลัพธ์ (Action)</th>
+                        <th>เหตุผลทางกลยุทธ์ (Strategic Rationale)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Priority 1</strong><br><span class="badge badge-sell">Contradiction</span></td>
+                        <td>
+                            Regime = <code style="color:var(--green)">TRENDING_UP</code><br>
+                            แต่ Sell Votes > Buy Votes และ <strong>Sell Votes < 6</strong>
+                        </td>
+                        <td><span class="badge badge-hold">HOLD</span></td>
+                        <td>
+                            <strong>บล็อกการสวนเทรนด์ขาขึ้น:</strong> ในเทรนด์ขาขึ้นแรง ห้ามเปิด SELL แม้โมเดลระยะสั้น 4-5 ตัวจะมองลง จนกว่าจะมีฉันทามติขั้นเด็ดขาด (&ge; 6 เสียง)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 2</strong><br><span class="badge badge-sell">Contradiction</span></td>
+                        <td>
+                            Regime = <code style="color:var(--red)">TRENDING_DOWN</code><br>
+                            แต่ Buy Votes > Sell Votes และ <strong>Buy Votes < 6</strong>
+                        </td>
+                        <td><span class="badge badge-hold">HOLD</span></td>
+                        <td>
+                            <strong>บล็อกการสวนเทรนด์ขาลง:</strong> ป้องกันการ "รับมีด" ในแนวโน้มลง จนกว่าเสียงโหวต BUY จะเกิน 6 เสียงขึ้นไป
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 3</strong><br><span class="badge badge-buy">Supermajority</span></td>
+                        <td>
+                            <strong>Buy Votes &ge; 5</strong> และ Buy Votes > Sell Votes
+                        </td>
+                        <td><span class="badge badge-buy">BUY</span></td>
+                        <td>
+                            <strong>ฉันทามติเสียงข้างมากเด็ดขาด:</strong> โมเดลเกินครึ่งหนึ่ง (55.6%+) ชี้ไปในทิศทางเดียวกัน สัญญาณมีน้ำหนักสูง
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 4</strong><br><span class="badge badge-sell">Supermajority</span></td>
+                        <td>
+                            <strong>Sell Votes &ge; 5</strong> และ Sell Votes > Buy Votes
+                        </td>
+                        <td><span class="badge badge-sell">SELL</span></td>
+                        <td>
+                            <strong>ฉันทามติเสียงข้างมากเด็ดขาด:</strong> สัญญาณลงแข็งแกร่งเกินครึ่งของระบบ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 5</strong><br><span class="badge badge-buy">Trend Discount</span></td>
+                        <td>
+                            <strong>Buy Votes = 4</strong> และ Buy > Sell<br>
+                            พร้อมกับ Regime = <code style="color:var(--green)">TRENDING_UP</code>
+                        </td>
+                        <td><span class="badge badge-buy">BUY</span></td>
+                        <td>
+                            <strong>ลดเกณฑ์เมื่อเทรนด์หนุน:</strong> ในสภาวะเทรนด์ขึ้นที่ชัดเจน ต้องการเสียง BUY เพียง 4 เสียงก็เพียงพอให้อนุมัติเข้าซื้อตามเทรนด์
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 6</strong><br><span class="badge badge-sell">Trend Discount</span></td>
+                        <td>
+                            <strong>Sell Votes = 4</strong> และ Sell > Buy<br>
+                            พร้อมกับ Regime = <code style="color:var(--red)">TRENDING_DOWN</code>
+                        </td>
+                        <td><span class="badge badge-sell">SELL</span></td>
+                        <td>
+                            <strong>ลดเกณฑ์เมื่อเทรนด์หนุน:</strong> ในสภาวะเทรนด์ลงชัดเจน ต้องการเสียง SELL เพียง 4 เสียงก็เพียงพอให้อนุมัติเข้า Short
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Priority 7</strong><br><span class="badge badge-hold">Default</span></td>
+                        <td>
+                            คะแนนกระจัดกระจาย เช่น Buy 3, Sell 3, Hold 3<br>
+                            หรือ Hold Votes เป็นเสียงข้างมาก
+                        </td>
+                        <td><span class="badge badge-hold">HOLD</span></td>
+                        <td>
+                            <strong>Market in Balance / Choppy Consensus:</strong> ตลาดไร้ข้อสรุป โมเดลขัดแย้งกันอย่างรุนแรง บังคับนิ่งเพื่อรักษาทุน
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 4: MARKET REGIMES & PERFORMANCE ==================== -->
+    <div id="tab-regimes" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">🎯 สภาวะตลาดและการปรับตัวแบบ Dynamic</h2>
+                    <div class="card-subtitle">เปรียบเทียบประสิทธิภาพของสัญญาณในแต่ละสถานการณ์ตลาดทองคำ</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="callout green">
+                    <div class="callout-title">🏆 สถานการณ์ที่ระบบทำงานได้ดีที่สุด (Peak Performance Zone)</div>
+                    <ul class="check-list">
+                        <li>
+                            <div class="check-icon">✓</div>
+                            <div>
+                                <strong>Sustained Trend (London & NY Session):</strong><br>
+                                เมื่อทองคำมีเทรนด์ต่อเนื่องชัดเจน ค่า ADX &ge; 25-35 โมเดลสาย Trend Following และ Boosting Trees จะจับการรันเทรนด์ได้เต็มคลื่น และทำกำไร TP ได้สม่ำเสมอ
+                            </div>
+                        </li>
+                        <li>
+                            <div class="check-icon">✓</div>
+                            <div>
+                                <strong>Multi-Timeframe Alignment:</strong><br>
+                                เมื่อ H1, M15, M5 ชี้ไปในทิศทางเดียวกัน อัตรา Win Rate ของสัญญาณ Breakout และ Pullback จะพุ่งสูงขึ้นกว่า 70%
+                            </div>
+                        </li>
+                        <li>
+                            <div class="check-icon">✓</div>
+                            <div>
+                                <strong>Clear Volatility Expansion (ATR Ratio 1.1 - 1.4):</strong><br>
+                                ช่วงที่ความผันผวนค่อยๆ เพิ่มขึ้นอย่างมีระเบียบ สภาพคล่องไหลเข้าต่อเนื่อง
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="callout red">
+                    <div class="callout-title">⚠️ สถานการณ์ที่อันตรายและประสิทธิภาพต่ำสุด (Dead Zone)</div>
+                    <ul class="check-list">
+                        <li>
+                            <div class="check-icon" style="background:rgba(244,63,94,0.2); border-color:rgba(244,63,94,0.5); color:#fb7185;">✗</div>
+                            <div>
+                                <strong>Choppy / Sideway Compression (ช่วงบีบอัดไร้ทิศทาง):</strong><br>
+                                ราคาแกว่งข้ามไปมาตัดเส้น EMA ซ้ำแล้วซ้ำเล่า โมเดลจะสลับผล BUY &harr; SELL กลับไปกลับมา ทำให้โดน Whipsaw ขาดทุนติดๆ กัน
+                            </div>
+                        </li>
+                        <li>
+                            <div class="check-icon" style="background:rgba(244,63,94,0.2); border-color:rgba(244,63,94,0.5); color:#fb7185;">✗</div>
+                            <div>
+                                <strong>Post-News Whiplash (ช่วงข่าวประกาศสำคัญ NFP/CPI):</strong><br>
+                                แท่งเทียนทิ้งไส้ยาวทั้งสองฝั่ง (Upper & Lower Shadows &gt; 40%) ทำให้ฟีเจอร์คำนวณผิดเพี้ยน และโมเดลจำกัดความเสี่ยงไม่ทัน
+                            </div>
+                        </li>
+                        <li>
+                            <div class="check-icon" style="background:rgba(244,63,94,0.2); border-color:rgba(244,63,94,0.5); color:#fb7185;">✗</div>
+                            <div>
+                                <strong>Late Asian Session Drift (10:00 - 13:00 เวลาไทย):</strong><br>
+                                สภาพคล่องต่ำ สเปรดอาจขยายตัว ราคาเดินแบบ Random Walk โดยไม่มี Volume สนับสนุน
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 5: CHOPPY FILTER (SPECIAL FOCUS) ==================== -->
+    <div id="tab-choppy" class="tab-content">
+        <div class="card" style="border-color: rgba(245, 158, 11, 0.5);">
+            <div class="card-header">
+                <div>
+                    <div class="hero-badge" style="margin-bottom: 8px;">👑 แก่นแท้ของการสร้าง Trading Edge</div>
+                    <h2 class="card-title" style="color: #fbbf24;">🛡️ กลไกการกรองสภาวะตลาด Choppy Market ขั้นสูง</h2>
+                    <div class="card-subtitle">
+                        วิธีหยุดการขาดทุนในตลาดไร้ทิศทาง เพื่อสงวนกระสุนไว้เทรดเฉพาะจังหวะที่ Price Action & Price Pattern มีความน่าจะเป็นสูงสุด
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout gold">
+                <div class="callout-title">📌 ทำไม Price Action ถึงล้มเหลวอย่างสิ้นเชิงในสภาวะ Choppy Market?</div>
+                <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.7;">
+                    ในสภาวะที่ตลาดเป็น <strong>Choppy (สภาวะฟันปลา / ไร้ทิศทาง)</strong> กลไกการเคลื่อนที่ของราคาจะเป็น <em>Mean-Reverting Noise หรือ Random Walk</em> รูปแบบ Price Pattern ทั่วไป เช่น Double Bottom, Bull Flag, Breakout หรือ Trendline Break <strong>มีอัตราล้มเหลว (Failure Rate) สูงถึง 70-80%</strong> เพราะสถาบันการเงินและ Market Makers มักใช้กรอบนี้ในการกวาดสภาพคล่อง (Liquidity Sweep / Stop Hunt) ทั้งบนและล่าง<br>
+                    <strong>กุญแจสำคัญสู่กำไรที่ยั่งยืน:</strong> ไม่ใช่การพยายามคาดเดาทิศทางในตลาด Choppy แต่คือ <em>"การระบุสภาวะ Choppy ให้ขาด แล้วยืนดูเฉยๆ (No Trade Zone)"</em> เพื่อรอให้เกิดการระเบิดตัวของทิศทาง (Expansion) เท่านั้น
+                </p>
+            </div>
+
+            <h3 style="color:#ffffff; margin: 28px 0 16px 0; font-size: 1.2rem;">🛠️ 4 เกราะป้องกัน Choppy Market & การคำนวณ Edge Score (Live Engine v2.0)</h3>
+
+            <div class="grid-2">
+                <!-- Filter 1: MTF Alignment Matrix -->
+                <div class="card" style="background: rgba(15, 23, 42, 0.9); border-color: var(--cyan);">
+                    <h4 style="color: var(--cyan); margin-bottom: 8px; font-size: 1.05rem;">
+                        1. Multi-Timeframe Alignment Gate (MTF Regime Filter) — น้ำหนัก 40 คะแนน
+                    </h4>
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <strong>หลักการ:</strong> การเคลื่อนที่ระดับ M5 มักเป็นเพียงคลื่นรบกวน (Noise) หากไทม์เฟรมหลักยังอยู่ในสภาวะขัดแย้งกัน
+                    </p>
+                    <div class="model-props" style="color: #e2e8f0;">
+                        <strong>สถาปัตยกรรม Live Watchlist:</strong><br>
+                        • ตรวจจับพร้อมกัน 4 ไทม์เฟรมหลักสำหรับ Day Trading: <code style="color:var(--cyan)">H1, M15, M5, M1</code><br>
+                        • <strong>4/4 TFs สอดคล้องกัน:</strong> มอบแต้มต่อเต็ม 40 คะแนน (Golden Momentum Window)<br>
+                        • <strong>3/4 TFs สอดคล้องกัน:</strong> มอบแต้มต่อ 28 คะแนน<br>
+                        • <strong>&le; 2/4 TFs:</strong> ได้คะแนนเพียง 14 หรือ 0 คะแนน และถือว่าเป็นสภาวะไม่เสถียร
+                    </div>
+                </div>
+
+                <!-- Filter 2: Kaufman Efficiency Ratio -->
+                <div class="card" style="background: rgba(15, 23, 42, 0.9); border-color: var(--gold);">
+                    <h4 style="color: var(--gold); margin-bottom: 8px; font-size: 1.05rem;">
+                        2. Kaufman Efficiency Ratio (KER Score) — น้ำหนัก 30 คะแนน
+                    </h4>
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <strong>หลักการ:</strong> วัดความสะอาดของเทรนด์ (Noise-to-Signal Ratio) ว่าราคาเดินทางเป็นเส้นตรงหรือสะบัดยึกยัก
+                    </p>
+                    <div class="model-props" style="color: #e2e8f0;">
+                        <strong>เกณฑ์การประเมินบน H1 + M15 (Day Trading Anchor):</strong><br>
+                        • <strong>KER &ge; 0.60 (TRENDING):</strong> ตลาดวิ่งสะอาด คลื่นรบกวนต่ำมาก ได้เต็ม 30 คะแนน<br>
+                        • <strong>KER 0.45 - 0.59 (DRIFTING):</strong> เทรนด์ปานกลาง มีการแกว่งตัว ได้ 15 คะแนน<br>
+                        • <strong>KER 0.30 - 0.44 (WEAK DRIFT):</strong> สัญญาณรบกวนเริ่มสูง ได้ 5 คะแนน<br>
+                        • <strong>KER &lt; 0.30 (CHOPPY):</strong> ฟันปลาขั้นวิกฤต ได้ 0 คะแนน (ตัดเข้าสู่ <strong>NO TRADE ZONE</strong> ทันที)
+                    </div>
+                </div>
+
+                <!-- Filter 3: Model Disagreement Entropy -->
+                <div class="card" style="background: rgba(15, 23, 42, 0.9); border-color: var(--purple);">
+                    <h4 style="color: #c084fc; margin-bottom: 8px; font-size: 1.05rem;">
+                        3. AI Disagreement & Consensus Strength — น้ำหนัก 20 คะแนน
+                    </h4>
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <strong>หลักการ:</strong> ใช้ระดับความเห็นพ้องของอัลกอริทึมทั้ง 9 ตัวเป็นตัวชี้วัดความน่าจะเป็นทางสถิติ
+                    </p>
+                    <div class="model-props" style="color: #e2e8f0;">
+                        <strong>เกณฑ์การให้คะแนน:</strong><br>
+                        • <strong>Consensus &ge; 7/9 โมเดล (&ge; 77.8%):</strong> คะแนนเต็ม 20 คะแนน<br>
+                        • <strong>Consensus &ge; 6/9 โมเดล (&ge; 66.7%):</strong> ได้ 14 คะแนน<br>
+                        • <strong>Consensus &ge; 5/9 โมเดล (&ge; 55.6%):</strong> ได้ 7 คะแนน<br>
+                        • <strong>Conflict Penalty:</strong> หากทิศทางเสียงข้างมากของ AI สวนทางกับ MTF Direction จะถูกหักลด 10 คะแนนทันที
+                    </div>
+                </div>
+
+                <!-- Filter 4: ADX & Anti-Falling Knife Gate -->
+                <div class="card" style="background: rgba(15, 23, 42, 0.9); border-color: var(--green);">
+                    <h4 style="color: #34d399; margin-bottom: 8px; font-size: 1.05rem;">
+                        4. ADX Trend Power & Falling Knife Gate — น้ำหนัก 10 คะแนน
+                    </h4>
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px;">
+                        <strong>หลักการ:</strong> วัดความเร่งของโมเมนตัม พร้อมสกัดกั้นการเปิดออเดอร์สวนมีดบินที่กำลังร่วงอย่างรุนแรง
+                    </p>
+                    <div class="model-props" style="color: #e2e8f0;">
+                        <strong>เกณฑ์การควบคุม:</strong><br>
+                        • <strong>ADX &ge; 35:</strong> เทรนด์รุนแรงมาก (+10 คะแนน) | <strong>ADX &ge; 25:</strong> เทรนด์แข็งแกร่ง (+7 คะแนน)<br>
+                        • <strong>🔪 Falling Knife Interceptor:</strong> เมื่อแท่งเทียนทิ้งตัวดิ่งด้วย Volume มหาศาล ระบบจะสั่งบล็อกสัญญาณ BUY ทุกกรณี และขึ้นป้ายเตือนสีแดง เพื่อให้รอแท่งกลับตัว Rejection ก่อนเสมอ
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tactical Matrix: Directional Bias vs. Executive Decision -->
+            <div class="card" style="background: rgba(11, 17, 32, 0.95); border-color: var(--gold); margin-top: 24px;">
+                <h3 style="color: #fbbf24; margin-bottom: 12px; font-size: 1.15rem;">
+                    🎯 ตารางยุทธวิธี: การประสานพลังระหว่าง Directional Bias กับ Executive Decision
+                </h3>
+                <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
+                    ทำความเข้าใจความสัมพันธ์ของสัญญาณเพื่อไม่ให้ตกเป็นเหยื่อของกับดักในตลาด:
+                </p>
+                <div style="overflow-x: auto;">
+                    <table class="tactical-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 17%; white-space: nowrap;">DIRECTIONAL BIAS (H1/M15)</th>
+                                <th style="width: 16%; white-space: nowrap;">EXECUTIVE DECISION (M5)</th>
+                                <th style="width: 25%; min-width: 210px; white-space: nowrap;">ประเภทการแจ้งเตือน (ALERT MODE)</th>
+                                <th style="width: 42%;">ความหมาย & แผนปฏิบัติการ Day Trading</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="background: rgba(16, 185, 129, 0.04);">
+                                <td style="font-weight: 700; color: #10b981; white-space: nowrap;">BULLISH</td>
+                                <td style="font-weight: 700; color: #10b981; white-space: nowrap;">BUY</td>
+                                <td><span class="tactical-badge badge-sniper-buy">🎯 SNIPER RE-ALIGNMENT</span></td>
+                                <td style="color: #e2e8f0; line-height: 1.5;"><strong>Golden Setup:</strong> การย่อตัวจบลงแล้ว ราคากลับมาวิ่งตามเทรนด์ใหญ่ ลุยเข้า BUY ทันทีตามแผน</td>
+                            </tr>
+                            <tr style="background: rgba(239, 68, 68, 0.04);">
+                                <td style="font-weight: 700; color: #ef4444; white-space: nowrap;">BEARISH</td>
+                                <td style="font-weight: 700; color: #ef4444; white-space: nowrap;">SELL</td>
+                                <td><span class="tactical-badge badge-sniper-sell">🎯 SNIPER RE-ALIGNMENT</span></td>
+                                <td style="color: #e2e8f0; line-height: 1.5;"><strong>Golden Setup:</strong> การเด้งตัวจบลงแล้ว ราคากลับมาทุบตามเทรนด์ใหญ่ ลุยเข้า SELL ทันทีตามแผน</td>
+                            </tr>
+                            <tr style="background: rgba(245, 158, 11, 0.04);">
+                                <td style="font-weight: 700; color: #10b981; white-space: nowrap;">BULLISH</td>
+                                <td style="font-weight: 700; color: #ef4444; white-space: nowrap;">SELL</td>
+                                <td><span class="tactical-badge badge-pullback">⚠️ SIGNIFICANT PULLBACK</span></td>
+                                <td style="color: #cbd5e1; line-height: 1.5;"><strong>ย่อตัวลึกสวนเทรนด์:</strong> AI ตรวจพบแรงเทขายใน M5 <u>ห้าม Sell ไล่ราคา</u> ให้รอราคาย่อลงมาทดสอบแนวรับเพื่อดักจังหวะ Sniper BUY</td>
+                            </tr>
+                            <tr style="background: rgba(245, 158, 11, 0.04);">
+                                <td style="font-weight: 700; color: #ef4444; white-space: nowrap;">BEARISH</td>
+                                <td style="font-weight: 700; color: #10b981; white-space: nowrap;">BUY</td>
+                                <td><span class="tactical-badge badge-pullback">⚠️ SIGNIFICANT BOUNCE</span></td>
+                                <td style="color: #cbd5e1; line-height: 1.5;"><strong>เด้งตัวสวนเทรนด์:</strong> เกิดการรีบาวด์ใน M5 <u>ห้าม Buy ไล่ราคา</u> ให้รอราคาเด้งไปชนแนวต้านเพื่อดักจังหวะ Sniper SELL</td>
+                            </tr>
+                            <tr style="background: rgba(100, 116, 139, 0.07);">
+                                <td style="font-weight: 700; color: #94a3b8; white-space: nowrap;">NEUTRAL</td>
+                                <td style="font-weight: 700; color: #fbbf24; white-space: nowrap;">BUY หรือ SELL</td>
+                                <td><span class="tactical-badge badge-notrade">⛔ NO TRADE ZONE</span></td>
+                                <td style="color: #94a3b8; line-height: 1.5;"><strong>กับดักไซด์เวย์ (Range Trap):</strong> มีการพุ่งตัวระยะสั้นในตลาดไร้ทิศทางใหญ่ <u>ห้ามเปิดออเดอร์ตามเด็ดขาด</u> เพราะเสี่ยงโดน False Breakout สูงมาก</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Interactive Choppiness & Edge Simulator -->
+            <div class="sim-box" style="margin-top: 24px;">
+                <div class="sim-title">
+                    <span>🎛️ Interactive Edge Score & Directional Bias Simulator (Engine Logic)</span>
+                </div>
+                <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
+                    ทดลองปรับค่าพารามิเตอร์จำลอง 4 ด้านตามอัลกอริทึมจริงของระบบเพื่อดูการประเมิน Edge Score (0–100) และสถานะ Bias:
+                </p>
+
+                <div class="sim-controls">
+                    <div class="sim-control-group">
+                        <div class="sim-label">
+                            <span>MTF Alignment Match (H1, M15, M5, M1):</span>
+                            <span class="val" id="val-mtf">3 / 4 TFs</span>
+                        </div>
+                        <input type="range" class="sim-slider" id="input-mtf" min="1" max="4" value="3" oninput="runSimulator()">
+                    </div>
+
+                    <div class="sim-control-group">
+                        <div class="sim-label">
+                            <span>Kaufman Efficiency Ratio (KER บน H1+M15):</span>
+                            <span class="val" id="val-ker">0.58</span>
+                        </div>
+                        <input type="range" class="sim-slider" id="input-ker" min="0.10" max="0.90" value="0.58" step="0.02" oninput="runSimulator()">
+                    </div>
+
+                    <div class="sim-control-group">
+                        <div class="sim-label">
+                            <span>AI Model Dominant Consensus (จาก 9 โมเดล):</span>
+                            <span class="val" id="val-votes">7 / 9</span>
+                        </div>
+                        <input type="range" class="sim-slider" id="input-votes" min="1" max="9" value="7" oninput="runSimulator()">
+                    </div>
+
+                    <div class="sim-control-group">
+                        <div class="sim-label">
+                            <span>ADX Trend Power:</span>
+                            <span class="val" id="val-adx">28</span>
+                        </div>
+                        <input type="range" class="sim-slider" id="input-adx" min="10" max="60" value="28" oninput="runSimulator()">
+                    </div>
+                </div>
+
+                <div class="sim-result">
+                    <div class="sim-status">
+                        <div id="simPill" class="status-pill pill-safe">HIGH EDGE — TRADE PRICE ACTION</div>
+                        <div>
+                            <div style="font-size: 0.8rem; color: var(--text-dim);">EDGE SCORE</div>
+                            <div id="simScore" style="font-size: 1.5rem; font-weight: 800; font-family: var(--font-mono); color: #34d399;">73 / 100</div>
+                        </div>
+                    </div>
+                    <div class="sim-detail" id="simExplanation">
+                        ตลาดมีความได้เปรียบสูงมาก สอดคล้องกันทั้งโครงสร้าง MTF และความสะอาดของเทรนด์ (KER)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 6: ACTIONABLE PLAYBOOK ==================== -->
+    <div id="tab-playbook" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">🚀 แผนปฏิบัติการนำไปประยุกต์ใช้สร้าง Edge (Actionable Trading Playbook)</h2>
+                    <div class="card-subtitle">สถาปัตยกรรม 3 ระดับสำหรับ Day Trader ทองคำ พร้อมระบบแจ้งเตือนอัจฉริยะและการควบคุมความเสี่ยง</div>
+                </div>
+            </div>
+
+            <!-- 3-Tier Architecture Callout -->
+            <div class="callout gold" style="margin-bottom: 24px;">
+                <div class="callout-title">🏛️ สถาปัตยกรรม Timeframe 3 ระดับสำหรับ Day Trading (The 3-Tier Hierarchy)</div>
+                <p style="color: var(--text-main); font-size: 0.9rem; line-height: 1.7;">
+                    • <strong>Tier 1: Macro Horizon (D1 / H4):</strong> "เข็มทิศทวีป" เช็คเพื่อหา Key Support/Resistance และป้องกันไม่ให้ Buy ชนแนวต้าน D1 หรือ Sell ชนแนวรับ H4<br>
+                    • <strong>Tier 2: Intraday Directional Bias (H1 / M15):</strong> "เทรนด์ของรอบวัน" ใช้ H1 ร่วมกับ M15 เป็นกระดูกสันหลังในการกำหนดหน้าเทรดหลัก เพราะทองคำแกว่งตัววันละ $20-40 การรอแค่ D1 จะช้าเกินไป (Lagging)<br>
+                    • <strong>Tier 3: Execution Trigger (M5 / M1):</strong> "จังหวะลั่นไก" รอเกิด Significant Pullback ย่อมาทดสอบแนวรับ แล้วเข้าออเดอร์ตามทิศทางของ Bias
+                </p>
+            </div>
+
+            <h3 style="color:var(--gold); margin-bottom: 14px; font-size:1.15rem;">📋 Checklist 5 ขั้นตอนก่อนลั่นไกด้วย Price Action (The Golden Rules)</h3>
+
+            <div class="flow-container">
+                <div class="flow-step">
+                    <div class="flow-num" style="border-color:var(--gold); color:var(--gold); background:rgba(245,158,11,0.15);">1</div>
+                    <div class="flow-content">
+                        <div class="flow-title">1. ตรวจสอบ Directional Bias & Edge Score บนแผง Sniper Radar</div>
+                        <div class="flow-desc">Bias ต้องเป็น <strong>BULLISH</strong> หรือ <strong>BEARISH</strong> เท่านั้น และ Edge Score ต้อง &ge; 50 ขึ้นไป (ไม่มีป้าย <strong>⛔ NO TRADE ZONE</strong>)</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num" style="border-color:var(--gold); color:var(--gold); background:rgba(245,158,11,0.15);">2</div>
+                    <div class="flow-content">
+                        <div class="flow-title">2. ยืนยันความสะอาดของเทรนด์ด้วย KER Score (H1 + M15)</div>
+                        <div class="flow-desc">ค่า Kaufman Efficiency Ratio ต้อง &ge; 0.45 (สถานะ TRENDING หรือ DRIFTING) เพื่อหลีกเลี่ยงสภาวะตลาดหลอกล่อสะบัดกิน Stop Loss</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num" style="border-color:var(--gold); color:var(--gold); background:rgba(245,158,11,0.15);">3</div>
+                    <div class="flow-content">
+                        <div class="flow-title">3. ตรวจสอบสถานะ Anti-Falling Knife Gate</div>
+                        <div class="flow-desc">ต้องไม่มีป้ายเตือน <strong>🔪 FALLING KNIFE DETECTED</strong> เพื่อป้องกันการรับมีดที่กำลังร่วงลงมาด้วยแรงเทขายผิดปกติ</div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num" style="border-color:var(--gold); color:var(--gold); background:rgba(245,158,11,0.15);">4</div>
+                    <div class="flow-content">
+                        <div class="flow-title">4. รอสัญญาณ Sniper Re-Alignment บน Executive Decision (M5)</div>
+                        <div class="flow-desc">
+                            เมื่อ Bias และ Executive Decision สอดคล้องกัน (เช่น Bullish + BUY) แสดงว่า Pullback ได้จบลงแล้ว จึงเปิดชาร์ตเพื่อหาจังหวะ Price Action Confirmation:
+                            <br>• <strong>Pullback Retest:</strong> ราคาแตะ Key Support / EMA 20 แล้วเกิดแท่งเทียน Reject (Pinbar / Bullish Engulfing)
+                            <br>• <strong>Liquidity Sweep & Reclaim:</strong> ราคาหลอกทุบกิน Stop Loss ใต้ Low ล่าสุดแล้วดีดดึงกลับขึ้นมาปิดเหนือเส้นทันที
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="flow-num" style="border-color:var(--gold); color:var(--gold); background:rgba(245,158,11,0.15);">5</div>
+                    <div class="flow-content">
+                        <div class="flow-title">5. วาง Stop Loss & Take Profit อิงตาม ATR (ไม่ขยับหนี SL)</div>
+                        <div class="flow-desc">ใช้ระยะ SL/TP แนะนำของระบบ (คำนวณจาก ATR Dynamic Volatility อัตราส่วน R:R อย่างน้อย 1:1.5 ขึ้นไป) ห้ามเลื่อน SL หนีเด็ดขาด</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Unified Alert System Feature Callout -->
+            <div class="callout cyan" style="margin-top: 28px;">
+                <div class="callout-title">🔔 ระบบแจ้งเตือนอัจฉริยะแบบหน้าต่างเดียว & การควบคุมเสียง (Unified Smart Alert System)</div>
+                <ul class="check-list">
+                    <li>
+                        <div class="check-icon">🎯</div>
+                        <div>
+                            <strong>Single Alert Rule:</strong> รวมการแจ้งเตือนสัญญาณทั้งหมดไว้ในหน้าต่างเดียว ไม่เปิดซ้อนทับกัน และแยกประเภทชัดเจนระหว่าง Sniper Re-Alignment (กรอบเขียวเรืองแสง) กับ Significant Pullback (กรอบส้มเตือนภัย)
+                        </div>
+                    </li>
+                    <li>
+                        <div class="check-icon">🔊</div>
+                        <div>
+                            <strong>Web Audio API Synthesizer:</strong> สังเคราะห์เสียงเตือนความถี่สูงในตัวเบราว์เซอร์ (Chime) แยกเสียงตามระดับความสำคัญ เช่น Triumphant 4-tone Arpeggio สำหรับ Sniper Re-Alignment
+                        </div>
+                    </li>
+                    <li>
+                        <div class="check-icon">🔇</div>
+                        <div>
+                            <strong>Sound ON/OFF Toggle:</strong> ปุ่มควบคุมเปิด/ปิดเสียงบนแดชบอร์ด พร้อมระบบจดจำสถานะผ่าน <code style="color:var(--cyan)">localStorage</code> อัตโนมัติ (แม้ปิดเสียง หน้าต่างแจ้งเตือนทางสายตายังทำงาน 100%)
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>AI Gold Scalper — Quantitative Research & Ensemble Analysis Report | Generated for Professional XAU/USD Traders</p>
+        <p style="margin-top: 6px; font-size: 0.8rem; color: var(--text-dim);">Confidential & Proprietary Trading System Analysis &copy; 2026</p>
+    </footer>
+</div>
+
+<!-- Scripts -->
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        const target = document.getElementById(tabId);
+        if (target) target.classList.add('active');
+        const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+        if (activeBtn) activeBtn.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function runSimulator() {
+        const mtf = parseInt(document.getElementById('input-mtf').value);
+        const ker = parseFloat(document.getElementById('input-ker').value);
+        const votes = parseInt(document.getElementById('input-votes').value);
+        const adx = parseFloat(document.getElementById('input-adx').value);
+
+        // Update UI labels
+        document.getElementById('val-mtf').innerText = mtf + " / 4 TFs";
+        document.getElementById('val-ker').innerText = ker.toFixed(2);
+        document.getElementById('val-votes').innerText = votes + " / 9";
+        document.getElementById('val-adx').innerText = adx.toFixed(0);
+
+        // Scoring based on live DirectionalBiasEngine (ai_engine.py)
+        let score = 0;
+
+        // 1. MTF Alignment (max 40 pts)
+        if (mtf === 4) score += 40;
+        else if (mtf === 3) score += 28;
+        else if (mtf === 2) score += 14;
+        else score += 0;
+
+        // 2. KER Score (max 30 pts)
+        if (ker >= 0.60) score += 30;
+        else if (ker >= 0.45) score += 15;
+        else if (ker >= 0.30) score += 5;
+        else score += 0;
+
+        // 3. AI Consensus (max 20 pts)
+        if (votes >= 7) score += 20;
+        else if (votes >= 6) score += 14;
+        else if (votes >= 5) score += 7;
+        else score += 0;
+
+        // 4. ADX Score (max 10 pts)
+        if (adx >= 35) score += 10;
+        else if (adx >= 25) score += 7;
+        else if (adx >= 20) score += 3;
+        else score += 0;
+
+        score = Math.min(100, score);
+
+        const pill = document.getElementById('simPill');
+        const scoreEl = document.getElementById('simScore');
+        const expEl = document.getElementById('simExplanation');
+
+        scoreEl.innerText = score + " / 100";
+
+        if (score >= 70 && ker >= 0.45) {
+            pill.className = "status-pill pill-safe";
+            pill.innerText = "HIGH EDGE — TRADE PRICE ACTION";
+            scoreEl.style.color = "#34d399";
+            expEl.innerHTML = "<strong>สภาพแวดล้อมตลาดสมบูรณ์แบบ (High Edge):</strong> MTF สอดคล้องกัน เทรนด์สะอาดชัดเจน (KER สูง) โมเดลมีฉันทามติเอกฉันท์ เหมาะที่สุดสำหรับการเข้าเทรดสไนเปอร์ตามจังหวะ Pullback!";
+        } else if (score >= 45 && ker >= 0.30) {
+            pill.className = "status-pill pill-neutral";
+            pill.innerText = "MODERATE — SELECTIVE TRADING";
+            scoreEl.style.color = "#fbbf24";
+            expEl.innerHTML = "<strong>ความได้เปรียบปานกลาง:</strong> โครงสร้างเทรนด์เกิดขึ้นบางส่วนแต่ยังไม่สมบูรณ์ 100% ควรเทรดเฉพาะ Setup เกรด A+ และอาจพิจารณาลดขนาด Lot Size ลง 30-50%";
+        } else {
+            pill.className = "status-pill pill-danger";
+            pill.innerText = "⛔ NO TRADE ZONE — CHOPPY MARKET";
+            scoreEl.style.color = "#fb7185";
+            expEl.innerHTML = "<strong>ตลาดไร้ทิศทาง / ไซด์เวย์อันตราย:</strong> คะแนน Edge ต่ำ หรือค่า KER ชี้ชัดว่าเป็นสภาวะฟันปลา สัญญาณ Breakout ในช่วงนี้มีโอกาสล้มเหลวสูง ควรงดเทรดและรอให้ตลาดเซ็ตตัว";
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        runSimulator();
+    });
+</script>
+</body>
+</html>
