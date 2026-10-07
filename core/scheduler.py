@@ -1,6 +1,6 @@
 """
 Clock-Aligned Background Scheduler for AI Gold Scalper Web Dashboard
-Calculates next clock boundary + 90 seconds buffer (1m30s), and runs background cycles.
+Calculates next clock boundary + 3 seconds buffer, and runs background cycles.
 """
 
 import time
@@ -30,40 +30,32 @@ INTERVAL_LABELS = {
     "4h": "4 Hours",
 }
 
+DEFAULT_BUFFER_SECONDS = 3
 
-def calculate_next_aligned_time(interval_minutes: int, buffer_seconds: int = 90) -> datetime:
+
+def calculate_next_aligned_time(
+    interval_minutes: int,
+    buffer_seconds: int = DEFAULT_BUFFER_SECONDS,
+    now: Optional[datetime] = None
+) -> datetime:
     """
     Calculates the next clock boundary aligned to interval_minutes + buffer_seconds.
 
-    Buffer = 90s (1m30s) ensures candles have fully closed and are committed before fetch:
-      - M1 last bar closes at :00/:05/:10... wait 90s → fetch at :01:30/:06:30...
-        Result: M1 latest bar = the :00/:05 bar (not the one before it).
-    E.g. for 5 mins at 15:02:10  -> 15:05:30  ... wait, 15:06:30 with 90s buffer.
-    For 5 mins at 15:02:10  -> next boundary 15:05, +90s -> 15:06:30.
-    For 15 mins at 15:04:00 -> next boundary 15:15, +90s -> 15:16:30.
-    For 1 hour at 15:04:00  -> next boundary 16:00, +90s -> 16:01:30.
+    Buffer = 3s ensures candles have fully closed in MT5 and accounts for 1-2s server/local clock skew:
+      - For 15 mins at 11:14:59 -> next boundary 11:15, +3s -> 11:15:03.
+      - For 15 mins at 11:15:03 -> next boundary 11:30, +3s -> 11:30:03.
+      - For 5 mins at 11:09:59  -> next boundary 11:10, +3s -> 11:10:03.
+      - For 1 hour at 11:59:59  -> next boundary 12:00, +3s -> 12:00:03.
     """
-    now = datetime.now()
+    if now is None:
+        now = datetime.now()
 
-    if interval_minutes < 60:
-        # Aligned to minute boundaries
-        minute_slot = (now.minute // interval_minutes + 1) * interval_minutes
-        if minute_slot >= 60:
-            target_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-            target = target_hour + timedelta(minutes=(minute_slot - 60), seconds=buffer_seconds)
-        else:
-            target = now.replace(minute=minute_slot, second=0, microsecond=0) + timedelta(seconds=buffer_seconds)
-    else:
-        # Aligned to hour boundaries (60, 120, 180, 240 mins)
-        hours_step = interval_minutes // 60
-        hour_slot = (now.hour // hours_step + 1) * hours_step
-        if hour_slot >= 24:
-            target_day = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            target = target_day + timedelta(hours=(hour_slot - 24), seconds=buffer_seconds)
-        else:
-            target = now.replace(hour=hour_slot, minute=0, second=0, microsecond=0) + timedelta(seconds=buffer_seconds)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seconds_from_day_start = (now - day_start).total_seconds()
+    interval_seconds = interval_minutes * 60
+    slot = int((seconds_from_day_start - buffer_seconds) // interval_seconds) + 1
+    target = day_start + timedelta(seconds=slot * interval_seconds + buffer_seconds)
 
-    # In rare case where target <= now (e.g. current second is 15:05:31), add one full interval
     if target <= now:
         target += timedelta(minutes=interval_minutes)
 
@@ -91,7 +83,7 @@ class GoldScheduler:
             if enabled:
                 # When switched to ON: Trigger immediate run, then set next aligned time
                 interval_mins = INTERVAL_MINUTES_MAP.get(self.interval_key, 5)
-                self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=90)
+                self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=DEFAULT_BUFFER_SECONDS)
                 # Spawn immediate run in separate thread so API doesn't block
                 threading.Thread(target=self._run_job_now, daemon=True).start()
             else:
@@ -105,7 +97,7 @@ class GoldScheduler:
                 self.interval_key = interval_key
                 if self.is_enabled:
                     interval_mins = INTERVAL_MINUTES_MAP[interval_key]
-                    self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=90)
+                    self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=DEFAULT_BUFFER_SECONDS)
 
         return self.get_status()
 
@@ -129,7 +121,7 @@ class GoldScheduler:
 
     def _worker_loop(self):
         while not self._stop_event.is_set():
-            time.sleep(1)
+            time.sleep(0.5)
             now = datetime.now()
 
             with self.lock:
@@ -137,7 +129,7 @@ class GoldScheduler:
                     if now >= self.next_run_time and not self.is_busy:
                         # Schedule next target first
                         interval_mins = INTERVAL_MINUTES_MAP.get(self.interval_key, 5)
-                        self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=90)
+                        self.next_run_time = calculate_next_aligned_time(interval_mins, buffer_seconds=DEFAULT_BUFFER_SECONDS)
                         # Run job
                         threading.Thread(target=self._run_job_now, daemon=True).start()
 

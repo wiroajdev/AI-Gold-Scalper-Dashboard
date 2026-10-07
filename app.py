@@ -182,6 +182,7 @@ def run_fetch_and_analysis_cycle():
                 latest_data["broker_timezone"] = fetch_res.get("broker_timezone")
                 latest_data["staging_dir"] = fetch_res.get("staging_dir")
                 latest_data["latest_price"] = fetch_res.get("latest_price")  # Bug #1 fix
+                latest_data["current_price"] = fetch_res.get("latest_price")
 
         print(
             f"[{datetime.now().strftime('%H:%M:%S')}] Cycle complete! "

@@ -755,15 +755,13 @@ def analyze_staged_data(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR, pri
         data_store=data_store
     )
 
-    # Use M1 last bar time for display
-    time_df = data_store["M1"] if "M1" in data_store else exec_df
+    # Use M5 last bar for display and closing price
+    display_tf = "M5" if "M5" in data_store else exec_tf
+    time_df = data_store.get(display_tf, exec_df)
     latest_row = time_df.iloc[-1]
     raw_time = str(latest_row["Time"]) if "Time" in latest_row else "N/A"
 
-    if "M1" in data_store and not data_store["M1"].empty:
-        current_price = float(data_store["M1"]["Close"].iloc[-1])
-    else:
-        current_price = float(latest_row["Close"])
+    current_price = float(time_df["Close"].iloc[-1])
 
     # Broker timezone
     broker_tz = "UTC+1"
@@ -783,13 +781,16 @@ def analyze_staged_data(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR, pri
     display_bar_time = raw_time
     try:
         dt = datetime.strptime(raw_time, "%Y.%m.%d %H:%M")
+        # Add 5 minutes to get M5 candle close time
+        dt_close = dt + timedelta(minutes=5)
         offset = 1
         if "UTC+" in broker_tz:
             offset = int(broker_tz.replace("UTC+", ""))
         elif "UTC-" in broker_tz:
             offset = -int(broker_tz.replace("UTC-", ""))
-        thai_dt = dt + timedelta(hours=(7 - offset))
-        display_bar_time = f"{raw_time} ({broker_tz}) | {thai_dt.strftime('%Y.%m.%d %H:%M')} (Thai)"
+        thai_dt = dt_close + timedelta(hours=(7 - offset))
+        close_time_str = dt_close.strftime("%Y.%m.%d %H:%M")
+        display_bar_time = f"{close_time_str} ({broker_tz}) | {thai_dt.strftime('%Y.%m.%d %H:%M')} (Thai)"
     except Exception:
         pass
 

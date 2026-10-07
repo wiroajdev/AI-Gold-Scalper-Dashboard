@@ -199,26 +199,41 @@ def fetch_and_stage_mt5_data(
             thai_dt = last_bar_dt + timedelta(hours=diff_thai)
             last_thai_time = thai_dt.strftime("%Y.%m.%d %H:%M" if tf_name != "D1" else "%Y.%m.%d")
 
+            # Calculate candle close time (open time + timeframe duration)
+            tf_minutes = 5
+            if tf_name == "M1": tf_minutes = 1
+            elif tf_name == "M5": tf_minutes = 5
+            elif tf_name == "M15": tf_minutes = 15
+            elif tf_name == "H1": tf_minutes = 60
+            elif tf_name == "H4": tf_minutes = 240
+            elif tf_name == "D1": tf_minutes = 1440
+
+            close_broker_dt = last_bar_dt + timedelta(minutes=tf_minutes)
+            close_thai_dt = thai_dt + timedelta(minutes=tf_minutes)
+            close_broker_time = close_broker_dt.strftime("%Y.%m.%d %H:%M" if tf_name != "D1" else "%Y.%m.%d")
+            close_thai_time = close_thai_dt.strftime("%Y.%m.%d %H:%M" if tf_name != "D1" else "%Y.%m.%d")
+
             timeframe_results[tf_name] = {
                 "file": csv_path.name,
                 "bars": len(df_export),
                 "broker_time": last_broker_time,
+                "close_broker_time": close_broker_time,
                 "thai_time": last_thai_time,
+                "close_thai_time": close_thai_time,
                 "latest_close": float(last_row["Close"])
             }
 
         # Select base execution timeframe bar
         chosen_tf = primary_tf if primary_tf in timeframe_results else ("M5" if "M5" in timeframe_results else list(timeframe_results.keys())[0])
 
-        # Use M1 bar time for display — most granular = most recent exported candle time.
-        # Falls back to chosen_tf if M1 is not in results.
-        display_tf = "M1" if "M1" in timeframe_results else chosen_tf
-        latest_bar_time_str = timeframe_results[display_tf]["broker_time"]
-        latest_thai_time_str = timeframe_results[display_tf]["thai_time"]
+        # Use M5 bar for display time and latest price (close time & close price of M5 candle)
+        display_tf = "M5" if "M5" in timeframe_results else chosen_tf
+        latest_bar_time_str = timeframe_results[display_tf].get("close_broker_time", timeframe_results[display_tf]["broker_time"])
+        latest_thai_time_str = timeframe_results[display_tf].get("close_thai_time", timeframe_results[display_tf]["thai_time"])
 
-        # For latest price, take the most recent close from exported data (M1 if available, else chosen_tf)
-        if "M1" in timeframe_results:
-            latest_price = timeframe_results["M1"]["latest_close"]
+        # Latest price uses M5 candle close price
+        if "M5" in timeframe_results:
+            latest_price = timeframe_results["M5"]["latest_close"]
         else:
             latest_price = timeframe_results[chosen_tf]["latest_close"]
 

@@ -521,6 +521,8 @@ class ProfessionalAdvisor:
                 london_low=london_low,
                 energy_budget=energy_budget,
                 thai_now=thai_now,
+                mtf_regimes=mtf_regimes,
+                setup_status=setup_status,
             )
 
         # Check ADR Exhaustion (TYPE A) Stand Down Rule
@@ -712,17 +714,19 @@ class ProfessionalAdvisor:
         london_low: Optional[float],
         energy_budget: Dict[str, Any],
         thai_now: datetime,
+        mtf_regimes: Optional[Dict[str, Dict[str, Any]]] = None,
+        setup_status: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         When the market is in Meat Grinder (CHOPPY_CHURN), instead of a blanket
         HOLD, intelligently routes to:
-          - SELL_FADE  : price near the top of the session range (fade rejection)
-          - BUY_FADE   : price near the bottom of the session range (fade sweep)
-          - HOLD/WAIT  : price in No Man's Land (middle of range) — wait for edge
-        
+          - SELL_FADE  : price near top of session range (fade rejection)
+          - BUY_FADE   : price near bottom of session range (fade sweep)
+          - HOLD/WAIT  : price in No Man's Land, OR blocked by HTF Trend Dominance,
+                         OR price has completely broken out/down past SL buffer.
+
         Near-edge threshold: price is within 25% of the range from either boundary.
-        SL is placed $3–$5 beyond the swept boundary.
-        TP1 targets the range midpoint; TP2 targets the opposite boundary.
+        Boundary SL buffer: scaled between $3–$6.
         """
         gross_travel = energy_budget.get("gross_travel", 0.0)
         travel_ratio = energy_budget.get("travel_ratio", 1.0)
@@ -757,74 +761,198 @@ class ProfessionalAdvisor:
 
         # SL buffer: scaled to ATR context, capped between $3–$6
         sl_buffer = round(min(6.0, max(3.0, session_range * 0.12)), 2)
-        # TP buffer: leave $1 before the boundary (avoid spread into the wall)
         tp_buffer = 1.0
+
+        # ── Extract HTF Trend Dominance (D1 / H4) ──────────────────────────
+        d1_reg = (mtf_regimes or {}).get("D1", {})
+        h4_reg = (mtf_regimes or {}).get("H4", {})
+
+        d1_regime = str(d1_reg.get("regime") or "").upper()
+        h4_regime = str(h4_reg.get("regime") or "").upper()
+        d1_bias = str(d1_reg.get("trend_bias") or ("BEARISH" if "DOWN" in d1_regime else ("BULLISH" if "UP" in d1_regime else "NEUTRAL"))).upper()
+        h4_bias = str(h4_reg.get("trend_bias") or ("BEARISH" if "DOWN" in h4_regime else ("BULLISH" if "UP" in h4_regime else "NEUTRAL"))).upper()
+        d1_adx = float(d1_reg.get("adx") or 0.0)
+        h4_adx = float(h4_reg.get("adx") or 0.0)
+
+        # HTF Super Trend: H4 trend with strong ADX (>=25) or D1+H4 aligned, or D1 ADX >= 35
+        htf_strong_bear = (h4_bias == "BEARISH" and (h4_adx >= 25.0 or d1_bias == "BEARISH")) or (d1_bias == "BEARISH" and d1_adx >= 35.0)
+        htf_strong_bull = (h4_bias == "BULLISH" and (h4_adx >= 25.0 or d1_bias == "BULLISH")) or (d1_bias == "BULLISH" and d1_adx >= 35.0)
+
+        # Check Price Action Candlestick Reversal Signals
+        pattern = str((setup_status or {}).get("price_action") or "").upper()
+        bull_reversal = any(p in pattern for p in ["HAMMER", "BULLISH_ENGULFING", "PINBAR", "REJECTION", "MORNING_STAR", "SPRING"])
+        bear_reversal = any(p in pattern for p in ["SHOOTING_STAR", "BEARISH_ENGULFING", "PINBAR", "REJECTION", "EVENING_STAR", "UPTHRUST"])
+
+        # ── Check Breakdown / Breakout First (Boundary Invalidation) ────────
+        # If price collapsed beyond the SL buffer below the range
+        if current_price < ref_low - sl_buffer:
+            return {
+                "action": "HOLD",
+                "bias": "BEARISH",
+                "badge_class": "caution",
+                "setup_name": f"Type C: Range Broken — Breakdown Below {ref_label} Low",
+                "entry_zone": f"ราคาหลุดแนวรับ {ref_label} Low ({ref_low:.2f}) ทะลุ Stop Loss Zone ({ref_low - sl_buffer:.2f}) ลงมาที่ {current_price:.2f} — ห้ามช้อน Buy สวนมีด",
+                "stop_loss": "—",
+                "tp1": "—",
+                "tp2": "—",
+                "rr_ratio": "—",
+                "confidence": 10,
+                "strategy_mode": "BREAKDOWN",
+                "fade_context": (
+                    f"โครงสร้างกรอบพัง (Breakdown): ราคาปิดหลุด {ref_label} Low ({ref_low:.2f}) "
+                    f"ทะลุโซนป้องกันลงมาที่ {current_price:.2f} โมเมนตัมขาลงกำลังครอบงำ "
+                    f"ห้ามเข้า Buy สวนเด็ดขาด รอดูว่าจะไหลต่อตามเทรนด์ใหญ่หรือมีแท่ง Reclaim ดึงกลับขึ้นมา"
+                ),
+            }
+
+        # If price expanded beyond the SL buffer above the range
+        if current_price > ref_high + sl_buffer:
+            return {
+                "action": "HOLD",
+                "bias": "BULLISH",
+                "badge_class": "caution",
+                "setup_name": f"Type C: Range Broken — Breakout Above {ref_label} High",
+                "entry_zone": f"ราคาพุ่งทะลุแนวต้าน {ref_label} High ({ref_high:.2f}) พ้น Stop Loss Zone ({ref_high + sl_buffer:.2f}) ขึ้นไปที่ {current_price:.2f} — ห้ามดัก Sell สวนขบวน",
+                "stop_loss": "—",
+                "tp1": "—",
+                "tp2": "—",
+                "rr_ratio": "—",
+                "confidence": 10,
+                "strategy_mode": "BREAKOUT",
+                "fade_context": (
+                    f"โครงสร้างกรอบพัง (Breakout): ราคาพุ่งทะลุ {ref_label} High ({ref_high:.2f}) "
+                    f"พ้นโซนป้องกันขึ้นไปที่ {current_price:.2f} เกิดสภาวะ Expansion "
+                    f"ห้ามดัก Short สวนเด็ดขาด"
+                ),
+            }
+
+        hour = thai_now.hour
+        extra_note = " ⚠️ Pre-London Judas Window — Confirmation Candle Required" if 13 <= hour < 14 else ""
 
         # ── Case B: Price near TOP of range → SELL FADE ──────────────────────
         if current_price >= near_top_threshold:
-            sl_price  = round(ref_high + sl_buffer, 2)
-            tp1_price = round(midpoint + tp_buffer, 2)
-            tp2_price = round(ref_low + tp_buffer, 2)
-            entry_low  = round(current_price - 0.5, 2)
-            entry_high = round(current_price + 1.5, 2)
+            # Check Anti-Fade Lock (Strong Bullish HTF)
+            if htf_strong_bull:
+                return {
+                    "action": "HOLD",
+                    "bias": "BULLISH",
+                    "badge_class": "caution",
+                    "setup_name": f"Type C: Meat Grinder — HTF Bullish Dominance (Anti-Fade Lock)",
+                    "entry_zone": f"งด Sell Fade ที่ขอบบน ({ref_high:.2f}) เนื่องจากโครงสร้างใหญ่ D1/H4 เป็นแนวโน้มขาขึ้นรุนแรง (ADX > 25)",
+                    "stop_loss": "—",
+                    "tp1": "—",
+                    "tp2": "—",
+                    "rr_ratio": "—",
+                    "confidence": 15,
+                    "strategy_mode": "RANGE_FADE",
+                    "fade_context": (
+                        f"เตือนภัยขั้นสูง: ราคาขึ้นทดสอบขอบบน {ref_label} High ({ref_high:.2f}) "
+                        f"แต่โครงสร้างใหญ่ D1/H4 เป็น Bullish Trend ชัดเจน ห้ามดัก Sell สวนขบวน — "
+                        f"เสี่ยงเกิด Short Squeeze ระเบิดทะลุกรอบ แนะนำ Stand Down หรือรอจังหวะ Follow Breakout"
+                    ),
+                }
+
+            entry_low  = round(min(current_price - 0.5, ref_high - 1.0), 2)
+            entry_high = round(max(current_price + 1.0, ref_high + 1.0), 2)
+            sl_price   = round(max(entry_high + 2.5, ref_high + sl_buffer), 2)
+            tp1_price  = round(midpoint + tp_buffer, 2)
+            tp2_price  = round(ref_low + tp_buffer, 2)
 
             risk    = max(1.0, sl_price - current_price)
             reward1 = max(1.0, current_price - tp1_price)
             rr      = round(reward1 / risk, 1)
 
-            # Time-context: add a stronger note during dangerous windows
-            hour = thai_now.hour
-            extra_note = " ⚠️ Pre-London Judas Window — Confirmation Candle Required" if 13 <= hour < 14 else ""
+            if bear_reversal:
+                action_name = "SELL_FADE"
+                badge = "sell"
+                conf = 65 if htf_strong_bear else 50
+                confirm_txt = " (ยืนยันแท่งเทียน Rejection แล้ว)"
+            else:
+                action_name = "SELL_FADE"
+                badge = "sell" if htf_strong_bear else "caution"
+                conf = 50 if htf_strong_bear else 35
+                confirm_txt = " — รอแท่งเทียน M5 Rejection Wick ยืนยันก่อนเข้า"
 
             return {
-                "action": "SELL_FADE",
+                "action": action_name,
                 "bias": "BEARISH",
-                "badge_class": "sell",
-                "setup_name": f"Type C: Range Fade — Sell Top of {ref_label} Range{extra_note}",
+                "badge_class": badge,
+                "setup_name": f"Type C: Range Fade — Sell Top of {ref_label} Range{confirm_txt}{extra_note}",
                 "entry_zone": f"{entry_low:.2f} – {entry_high:.2f} (Rejection Zone ใกล้ {ref_label} High {ref_high:.2f})",
                 "stop_loss": f"{sl_price:.2f} (-${risk:.1f}) เหนือ {ref_label} High",
                 "tp1": f"{tp1_price:.2f} (+${reward1:.1f}) กึ่งกลางกรอบ",
                 "tp2": f"{tp2_price:.2f} ขอบล่าง {ref_label} Low",
                 "rr_ratio": f"1:{rr:.1f}",
-                "confidence": 45,
+                "confidence": conf,
                 "strategy_mode": "RANGE_FADE",
                 "fade_context": (
                     f"Meat Grinder: วิ่งสะสม ${gross_travel:.2f} ({travel_ratio:.1f}x กรอบ 4H) "
                     f"ราคาเข้าใกล้ขอบบน {ref_label} High ({ref_high:.2f}) "
+                    f"{'โครงสร้างใหญ่ D1/H4 สนับสนุนหน้า Sell ได้เปรียบ ' if htf_strong_bear else ''}"
                     f"รอแท่ง M5 ทิ้งไส้บนปฏิเสธราคา (Rejection Wick / Bearish Engulfing) แล้วค่อยเข้า Sell Fade"
                 ),
             }
 
         # ── Case C: Price near BOTTOM of range → BUY FADE ────────────────────
         if current_price <= near_bottom_threshold:
-            sl_price  = round(ref_low - sl_buffer, 2)
-            tp1_price = round(midpoint - tp_buffer, 2)
-            tp2_price = round(ref_high - tp_buffer, 2)
-            entry_low  = round(current_price - 1.5, 2)
-            entry_high = round(current_price + 0.5, 2)
+            # Check Anti-Fade Lock (Strong Bearish HTF)
+            if htf_strong_bear:
+                return {
+                    "action": "HOLD",
+                    "bias": "BEARISH",
+                    "badge_class": "caution",
+                    "setup_name": f"Type C: Meat Grinder — HTF Bearish Dominance (Anti-Fade Lock)",
+                    "entry_zone": f"งด Buy Fade ที่ขอบล่าง ({ref_low:.2f}) เนื่องจากโครงสร้างใหญ่ D1/H4 เป็นแนวโน้มขาลงรุนแรง (ADX > 25)",
+                    "stop_loss": "—",
+                    "tp1": "—",
+                    "tp2": "—",
+                    "rr_ratio": "—",
+                    "confidence": 15,
+                    "strategy_mode": "RANGE_FADE",
+                    "fade_context": (
+                        f"เตือนภัยขั้นสูง: ราคาลงมาทดสอบขอบล่าง {ref_label} Low ({ref_low:.2f}) "
+                        f"แต่โครงสร้างใหญ่ D1/H4 เป็น Super Downtrend ห้ามดัก Buy สวนมีดเด็ดขาด — "
+                        f"เสี่ยงเกิด Liquidity Sweep หรือ Breakdown ไหลลงต่อเนื่องตามเทรนด์ใหญ่ แนะนำ Stand Down ถือเงินสด 100%"
+                    ),
+                }
+
+            entry_low  = round(min(current_price - 1.0, ref_low - 1.0), 2)
+            entry_high = round(max(current_price + 0.5, ref_low + 1.0), 2)
+            sl_price   = round(min(entry_low - 2.5, ref_low - sl_buffer), 2)
+            tp1_price  = round(midpoint - tp_buffer, 2)
+            tp2_price  = round(ref_high - tp_buffer, 2)
 
             risk    = max(1.0, current_price - sl_price)
             reward1 = max(1.0, tp1_price - current_price)
             rr      = round(reward1 / risk, 1)
 
-            hour = thai_now.hour
-            extra_note = " ⚠️ Pre-London Judas Window — Confirmation Candle Required" if 13 <= hour < 14 else ""
+            if bull_reversal:
+                action_name = "BUY_FADE"
+                badge = "buy"
+                conf = 65 if htf_strong_bull else 50
+                confirm_txt = " (ยืนยันแท่งเทียน Rejection แล้ว)"
+            else:
+                action_name = "BUY_FADE"
+                badge = "buy" if htf_strong_bull else "caution"
+                conf = 50 if htf_strong_bull else 35
+                confirm_txt = " — รอแท่งเทียน M5 Rejection Wick ยืนยันก่อนเข้า"
 
             return {
-                "action": "BUY_FADE",
+                "action": action_name,
                 "bias": "BULLISH",
-                "badge_class": "buy",
-                "setup_name": f"Type C: Range Fade — Buy Bottom of {ref_label} Range{extra_note}",
+                "badge_class": badge,
+                "setup_name": f"Type C: Range Fade — Buy Bottom of {ref_label} Range{confirm_txt}{extra_note}",
                 "entry_zone": f"{entry_low:.2f} – {entry_high:.2f} (Sweep Zone ใกล้ {ref_label} Low {ref_low:.2f})",
                 "stop_loss": f"{sl_price:.2f} (-${risk:.1f}) ใต้ {ref_label} Low",
                 "tp1": f"{tp1_price:.2f} (+${reward1:.1f}) กึ่งกลางกรอบ",
                 "tp2": f"{tp2_price:.2f} ขอบบน {ref_label} High",
                 "rr_ratio": f"1:{rr:.1f}",
-                "confidence": 45,
+                "confidence": conf,
                 "strategy_mode": "RANGE_FADE",
                 "fade_context": (
                     f"Meat Grinder: วิ่งสะสม ${gross_travel:.2f} ({travel_ratio:.1f}x กรอบ 4H) "
                     f"ราคาเข้าใกล้ขอบล่าง {ref_label} Low ({ref_low:.2f}) "
+                    f"{'โครงสร้างใหญ่ D1/H4 สนับสนุนหน้า Buy ได้เปรียบ ' if htf_strong_bull else ''}"
                     f"รอแท่ง M5 ทิ้งไส้ล่างปฏิเสธราคา (Long Lower Wick / Bullish Engulfing) แล้วค่อยเข้า Buy Fade"
                 ),
             }
@@ -909,11 +1037,22 @@ class ProfessionalAdvisor:
                 )
                 if fade_context:
                     narrative.append(f"คำแนะนำ Range Fade: {fade_context}")
-            else:
+            elif strategy_mode in ("BREAKDOWN", "BREAKOUT"):
+                direction_name = "หลุดกรอบขาลง (Breakdown)" if strategy_mode == "BREAKDOWN" else "ทะลุกรอบขาขึ้น (Breakout)"
                 narrative.append(
-                    f"คำเตือนพลังงาน: ตลาดอยู่ในสภาวะ Meat Grinder (รอบ 4H วิ่งสะสม ${gt:.2f} หรือ {tr:.1f}x ของกรอบ) "
-                    f"ราคาอยู่กลางกรอบ (No Man's Land) — ห้ามเข้า รอดักขอบกรอบ Session ก่อน"
+                    f"สภาวะตลาดพังกรอบ: ราคาได้เกิด {direction_name} ทะลุกรอบ Meat Grinder ไปแล้ว "
+                    f"ห้ามดักสวนเด็ดขาด ตลาดเปลี่ยนผ่านเข้าสู่โหมด Expansion"
                 )
+                if fade_context:
+                    narrative.append(f"คำแนะนำเชิงโครงสร้าง: {fade_context}")
+            else:
+                if fade_context:
+                    narrative.append(f"คำเตือนสภาวะ Meat Grinder: {fade_context}")
+                else:
+                    narrative.append(
+                        f"คำเตือนพลังงาน: ตลาดอยู่ในสภาวะ Meat Grinder (รอบ 4H วิ่งสะสม ${gt:.2f} หรือ {tr:.1f}x ของกรอบ) "
+                        f"ราคาอยู่กลางกรอบ (No Man's Land) — ห้ามเข้า รอดักขอบกรอบ Session ก่อน"
+                    )
         elif energy_lvl == "EXHAUSTED":
             ep = energy_budget.get("energy_used_pct", 0.0)
             narrative.append(f"คำเตือนพลังงาน: ราคาวิ่งใช้พลังงานไปแล้ว {ep}% ของ ADR ชนเพดานปลอดภัยของวัน ระวังการเทขายทำกำไรและ Reversal รุนแรง")
@@ -995,10 +1134,15 @@ class ProfessionalAdvisor:
                     f"วาง SL สั้น ${trade_setup.get('stop_loss', '—')} TP1: {trade_setup.get('tp1', '—')} "
                     f"ห้ามย้าย SL เด็ดขาด"
                 )
+            elif strategy_mode in ("BREAKDOWN", "BREAKOUT"):
+                narrative.append(
+                    f"คำเตือนทางวินัย: เกิด {strategy_mode} ทะลุกรอบชัดเจน ห้ามเปิดออเดอร์สวนมีดเด็ดขาด "
+                    f"การนั่งทับมือและถือเงินสดรอตลาดสร้างฐานใหม่ คือการรักษา Capital ที่ถูกต้อง"
+                )
             else:
                 narrative.append(
-                    "คำเตือนทางวินัย: ราคาอยู่กลางกรอบ Meat Grinder ไม่มี Edge ชัดเจน "
-                    "การนั่งทับมือรอดักขอบกรอบ คือการรักษา Capital ของมืออาชีพ"
+                    "คำเตือนทางวินัย: ตลาดอยู่ในโหมด Meat Grinder หรือติดเงื่อนไข Anti-Fade Lock "
+                    "การนั่งทับมือถือเงินสด 100% คือการรักษาพอร์ตของมืออาชีพ"
                 )
         elif energy_lvl == "EXHAUSTED":
             narrative.append("คำเตือนทางวินัย: เมื่อราคาชนเพดานพลังงาน ADR การล็อคกำไรและถือเงินสด คือการปกป้องกำไรที่ปลอดภัยที่สุด")

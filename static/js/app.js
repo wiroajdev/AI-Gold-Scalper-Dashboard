@@ -627,8 +627,10 @@ function renderDashboard(payload) {
     document.getElementById("confidenceBar").style.width = `${confidence}%`;
     document.getElementById("decisionReason").textContent = ensemble.filter_reason || "Analyzing price structure...";
 
-    const currentPrice = data.current_price || 0.0;
-    document.getElementById("currentPriceDisplay").textContent = `$${currentPrice.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
+    const currentPrice = data.current_price || data.latest_price || 0.0;
+    const currentPriceElem = document.getElementById("currentPriceDisplay");
+    currentPriceElem.textContent = `$${currentPrice.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
+    currentPriceElem.title = "M5 Candle Close Price";
 
     const entry = ensemble.entry_price || currentPrice;
     document.getElementById("entryPrice").textContent = `$${entry.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
