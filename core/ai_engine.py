@@ -1,10 +1,11 @@
 """
-AI Engine for Web Dashboard — Price Action Sniper Mode (v2.0)
-Upgraded from micro-scalper (3-bar) to Day Trading Radar:
-- forward_bars = 12 (60-min horizon on M5, aligns with 1-hour session)
+AI Engine for Web Dashboard — Price Action & Multi-Timeframe Radar (v3.0)
+Specialized for XAU/USD Day Trading:
 - Kaufman Efficiency Ratio (KER) for Chop vs. Trend detection
-- Anti-Falling-Knife Interceptor (prevents BUY on bearish momentum candles)
-- DirectionalBiasEngine: outputs Bullish/Bearish/Neutral bias with Edge Score
+- Anti-Falling-Knife / Anti-Rising-Knife Interceptors
+- DirectionalBiasEngine: outputs Bullish/Bearish/Neutral bias with Edge Score (0-100)
+- Multi-Timeframe Alignment (H1, M15, M5, M1)
+- 9+ Ensemble ML voting logic removed per user specification.
 """
 
 import warnings
@@ -14,13 +15,6 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Union, List
 import numpy as np
 import pandas as pd
-
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.neural_network import MLPClassifier
-from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -198,110 +192,35 @@ class MarketRegimeDetector:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ENSEMBLE ENGINE (forward_bars=12, Anti-Falling-Knife Interceptor)
+# ENSEMBLE ENGINE (DEPRECATED STUB)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class EnsembleEngine:
+    """Legacy placeholder: Ensemble ML models removed per user specification."""
     def __init__(self):
-        self.scaler = StandardScaler()
-        self.model_names = [
-            "Random Forest",
-            "Gradient Boosting",
-            "Extra Trees",
-            "Support Vector Classifier (SVC)",
-            "K-Nearest Neighbors (KNN)",
-            "Logistic Regression",
-            "Neural Network (MLP)",
-            "Gold Trend-Following Engine",
-            "Gold Mean-Reversion Engine"
-        ]
+        self.model_names = []
 
-    @staticmethod
-    def extract_features(df: pd.DataFrame) -> pd.DataFrame:
-        data = df.copy()
-        c = data["Close"]
-        h = data["High"]
-        l = data["Low"]
-        o = data["Open"]
-        v = data["TickVolume"] if "TickVolume" in data.columns else (data["Volume"] if "Volume" in data.columns else pd.Series(1, index=data.index))
+    def predict(self, df: pd.DataFrame, regime_info: Dict[str, Any]) -> Dict[str, Any]:
+        return {}
 
-        def get_rsi(series, period):
-            delta = series.diff()
-            gain = (delta.where(delta > 0, 0)).rolling(period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-            rs = gain / loss.replace(0, 1e-6)
-            return 100 - (100 / (1 + rs))
 
-        data["rsi_14"] = get_rsi(c, 14)
-        data["rsi_7"] = get_rsi(c, 7)
+# ─────────────────────────────────────────────────────────────────────────────
+# DIRECTIONAL BIAS ENGINE — Price Action Sniper Radar
+# ─────────────────────────────────────────────────────────────────────────────
 
-        ema12 = c.ewm(span=12, adjust=False).mean()
-        ema26 = c.ewm(span=26, adjust=False).mean()
-        macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False).mean()
-        data["macd_diff"] = macd - signal
+class DirectionalBiasEngine:
+    """
+    Aggregates MTF regime alignment, KER scores, and ADX momentum
+    to produce a single Directional Bias (BULLISH / BEARISH / NEUTRAL)
+    and an Edge Score (0–100) for Price Action day trading.
 
-        sma20 = c.rolling(20).mean()
-        std20 = c.rolling(20).std()
-        upper = sma20 + 2.0 * std20
-        lower = sma20 - 2.0 * std20
-        data["bb_pos"] = (c - lower) / (upper - lower).replace(0, 1e-6)
+    Scoring Breakdown (total 100 pts):
+    - MTF Alignment (H1+M15+M5+M1):  50 pts  — macro + entry alignment
+    - KER (H1+M15 averaged):          35 pts  — chop vs. trend quality
+    - ADX Trend Power (exec TF):      15 pts  — directional momentum
+    """
 
-        lowest14 = l.rolling(14).min()
-        highest14 = h.rolling(14).max()
-        data["stoch_k"] = 100 * (c - lowest14) / (highest14 - lowest14).replace(0, 1e-6)
-
-        tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
-        atr14 = tr.rolling(14).mean().replace(0, 1e-6)
-        data["atr14"] = atr14
-
-        ema9 = c.ewm(span=9, adjust=False).mean()
-        ema21 = c.ewm(span=21, adjust=False).mean()
-        data["ema_diff_atr"] = (ema9 - ema21) / atr14
-
-        data["candle_body"] = (c - o) / (h - l + 1e-4)
-        data["upper_shadow"] = (h - np.maximum(c, o)) / (h - l + 1e-4)
-        data["lower_shadow"] = (np.minimum(c, o) - l) / (h - l + 1e-4)
-
-        data["mom_3"] = (c - c.shift(3)) / atr14
-        data["mom_5"] = (c - c.shift(5)) / atr14
-
-        vol_avg = v.rolling(20).mean().replace(0, 1)
-        data["vol_ratio"] = v / vol_avg
-
-        feature_cols = [
-            "rsi_14", "rsi_7", "macd_diff", "bb_pos", "stoch_k",
-            "ema_diff_atr", "candle_body", "upper_shadow", "lower_shadow",
-            "mom_3", "mom_5", "vol_ratio"
-        ]
-        return data[feature_cols].bfill().fillna(0)
-
-    @staticmethod
-    def create_labels(df: pd.DataFrame, forward_bars: int = 12) -> pd.Series:
-        """
-        Triple-Barrier inspired labeling:
-        - Look 12 bars ahead (60 mins on M5) — day trading horizon
-        - Threshold = 1.0 ATR (requires meaningful move, not just noise)
-        - Label +1 (BUY) if price gains > 1.0 ATR within horizon
-        - Label -1 (SELL) if price drops > 1.0 ATR within horizon
-        - Label  0 (HOLD/CHOP) if price stays within ±1.0 ATR (no clear direction)
-        """
-        close = df["Close"]
-        tr = pd.concat([
-            df["High"] - df["Low"],
-            (df["High"] - close.shift(1)).abs(),
-            (df["Low"] - close.shift(1)).abs()
-        ], axis=1).max(axis=1)
-        atr = tr.rolling(14).mean().fillna(1.5)
-
-        future_ret = (close.shift(-forward_bars) - close)
-        # Raised threshold from 0.6 ATR (scalper) to 1.0 ATR (day trader)
-        threshold = atr * 1.0
-
-        labels = pd.Series(0, index=df.index)
-        labels[future_ret > threshold] = 1
-        labels[future_ret < -threshold] = -1
-        return labels
+    MTF_WATCH = ["H1", "M15", "M5", "M1"]   # day trading Timeframes
 
     @staticmethod
     def _check_falling_knife(df: pd.DataFrame, atr: float) -> bool:
@@ -309,12 +228,8 @@ class EnsembleEngine:
         Anti-Falling-Knife Interceptor.
         Returns True if the latest candle shows aggressive bearish momentum
         that should BLOCK a BUY signal (catching a falling knife).
-
-        Conditions (both must be true):
-        1. Latest candle body is strongly bearish (body < -65% of candle range)
-        2. 3-bar momentum is strongly negative (< -1.5 ATR) — still in free-fall
         """
-        if len(df) < 5:
+        if df is None or len(df) < 5:
             return False
         last = df.iloc[-1]
         candle_range = float(last["High"] - last["Low"])
@@ -329,9 +244,8 @@ class EnsembleEngine:
         """
         Anti-Rising-Knife Interceptor (mirror of falling knife for SELL).
         Blocks SELL when price just spiked up aggressively (potential fakeout).
-        Conditions: Strongly bullish candle body + 3-bar mom > +1.5 ATR
         """
-        if len(df) < 5:
+        if df is None or len(df) < 5:
             return False
         last = df.iloc[-1]
         candle_range = float(last["High"] - last["Low"])
@@ -341,227 +255,16 @@ class EnsembleEngine:
         mom_3bar = float(last["Close"] - df["Close"].iloc[-4]) / max(atr, 0.01)
         return body_ratio > 0.65 and mom_3bar > 1.5
 
-    def predict(self, df: pd.DataFrame, regime_info: Dict[str, Any]) -> Dict[str, Any]:
-        current_atr = regime_info.get("atr", 2.0)
-        current_price = float(df["Close"].iloc[-1]) if not df.empty else 0.0
-
-        if len(df) < 50:
-            return {
-                "action": "HOLD",
-                "confidence": 0,
-                "buy_votes": 0,
-                "sell_votes": 0,
-                "hold_votes": 9,
-                "total_models": 9,
-                "votes": {name: "HOLD" for name in self.model_names},
-                "filter_reason": "Insufficient bars for ensemble inference",
-                "falling_knife_warning": False,
-                "entry_price": current_price,
-                "sl_price": 0.0,
-                "tp1_price": 0.0,
-                "tp2_price": 0.0,
-                "risk_reward_ratio": 0.0
-            }
-
-        features = self.extract_features(df)
-        # Day trading horizon: 12 bars (60 min on M5)
-        labels = self.create_labels(df, forward_bars=12)
-
-        valid_idx = labels.iloc[:-13].index  # exclude last 12 unlabeled bars
-        X_train = features.loc[valid_idx]
-        y_train = labels.loc[valid_idx]
-        X_latest = features.iloc[[-1]]
-
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_latest_scaled = self.scaler.transform(X_latest)
-
-        votes: Dict[str, str] = {}
-
-        # 1. Random Forest
-        rf = RandomForestClassifier(n_estimators=40, max_depth=5, random_state=42)
-        rf.fit(X_train_scaled, y_train)
-        pred_rf = int(rf.predict(X_latest_scaled)[0])
-        votes["Random Forest"] = "BUY" if pred_rf == 1 else ("SELL" if pred_rf == -1 else "HOLD")
-
-        # 2. Gradient Boosting
-        gb = GradientBoostingClassifier(n_estimators=35, max_depth=3, random_state=42)
-        gb.fit(X_train_scaled, y_train)
-        pred_gb = int(gb.predict(X_latest_scaled)[0])
-        votes["Gradient Boosting"] = "BUY" if pred_gb == 1 else ("SELL" if pred_gb == -1 else "HOLD")
-
-        # 3. Extra Trees
-        et = ExtraTreesClassifier(n_estimators=35, max_depth=5, random_state=42)
-        et.fit(X_train_scaled, y_train)
-        pred_et = int(et.predict(X_latest_scaled)[0])
-        votes["Extra Trees"] = "BUY" if pred_et == 1 else ("SELL" if pred_et == -1 else "HOLD")
-
-        # 4. SVC
-        svc = SVC(kernel="rbf", C=1.0, random_state=42)
-        svc.fit(X_train_scaled, y_train)
-        pred_svc = int(svc.predict(X_latest_scaled)[0])
-        votes["Support Vector Classifier (SVC)"] = "BUY" if pred_svc == 1 else ("SELL" if pred_svc == -1 else "HOLD")
-
-        # 5. KNN
-        knn = KNeighborsClassifier(n_neighbors=min(7, len(X_train)))
-        knn.fit(X_train_scaled, y_train)
-        pred_knn = int(knn.predict(X_latest_scaled)[0])
-        votes["K-Nearest Neighbors (KNN)"] = "BUY" if pred_knn == 1 else ("SELL" if pred_knn == -1 else "HOLD")
-
-        # 6. Logistic Regression
-        lr = LogisticRegression(max_iter=300, random_state=42)
-        lr.fit(X_train_scaled, y_train)
-        pred_lr = int(lr.predict(X_latest_scaled)[0])
-        votes["Logistic Regression"] = "BUY" if pred_lr == 1 else ("SELL" if pred_lr == -1 else "HOLD")
-
-        # 7. MLP
-        mlp = MLPClassifier(hidden_layer_sizes=(32, 16), max_iter=300, random_state=42)
-        mlp.fit(X_train_scaled, y_train)
-        pred_mlp = int(mlp.predict(X_latest_scaled)[0])
-        votes["Neural Network (MLP)"] = "BUY" if pred_mlp == 1 else ("SELL" if pred_mlp == -1 else "HOLD")
-
-        # 8. Gold Trend-Following Engine
-        latest_feat = features.iloc[-1]
-        trend_score = 0
-        if latest_feat["ema_diff_atr"] > 0.15 and latest_feat["rsi_14"] > 52 and latest_feat["macd_diff"] > 0:
-            trend_score = 1
-        elif latest_feat["ema_diff_atr"] < -0.15 and latest_feat["rsi_14"] < 48 and latest_feat["macd_diff"] < 0:
-            trend_score = -1
-        votes["Gold Trend-Following Engine"] = "BUY" if trend_score == 1 else ("SELL" if trend_score == -1 else "HOLD")
-
-        # 9. Gold Mean-Reversion Engine
-        # NOTE: In day trading mode, mean-reversion signals are treated as HOLD
-        # instead of BUY/SELL, to prevent catching falling/rising knives.
-        # A "PULLBACK ZONE" note is embedded in the filter reason instead.
-        revert_score = 0
-        revert_note = ""
-        if latest_feat["bb_pos"] < 0.12 and latest_feat["stoch_k"] < 20:
-            revert_score = 0  # was 1 (BUY) — now suppressed as standalone signal
-            revert_note = "Oversold zone detected — potential pullback support"
-        elif latest_feat["bb_pos"] > 0.88 and latest_feat["stoch_k"] > 80:
-            revert_score = 0  # was -1 (SELL) — now suppressed as standalone signal
-            revert_note = "Overbought zone detected — potential pullback resistance"
-        votes["Gold Mean-Reversion Engine"] = "HOLD"  # always HOLD in Sniper Mode
-
-        buy_votes = sum(1 for v in votes.values() if v == "BUY")
-        sell_votes = sum(1 for v in votes.values() if v == "SELL")
-        hold_votes = sum(1 for v in votes.values() if v == "HOLD")
-        total_models = len(votes)
-
-        regime = regime_info.get("regime", "RANGING")
-
-        # ── Anti-Falling-Knife & Anti-Rising-Knife Interceptors ──
-        falling_knife = self._check_falling_knife(df, current_atr)
-        rising_knife = self._check_rising_knife(df, current_atr)
-
-        # ── Gating Logic (same as before, but interceptors override first) ──
-        if regime == "TRENDING_UP" and sell_votes > buy_votes and sell_votes < 6:
-            action = "HOLD"
-            reason = "Suppressed SELL against TRENDING_UP regime"
-        elif regime == "TRENDING_DOWN" and buy_votes > sell_votes and buy_votes < 6:
-            action = "HOLD"
-            reason = "Suppressed BUY against TRENDING_DOWN regime"
-        elif buy_votes >= 5 and buy_votes > sell_votes:
-            action = "BUY"
-            reason = f"Strong Bullish Consensus ({buy_votes}/{total_models} models)"
-        elif sell_votes >= 5 and sell_votes > buy_votes:
-            action = "SELL"
-            reason = f"Strong Bearish Consensus ({sell_votes}/{total_models} models)"
-        elif buy_votes >= 4 and buy_votes > sell_votes and regime == "TRENDING_UP":
-            action = "BUY"
-            reason = f"Trend-aligned Bullish Consensus ({buy_votes}/{total_models} models)"
-        elif sell_votes >= 4 and sell_votes > buy_votes and regime == "TRENDING_DOWN":
-            action = "SELL"
-            reason = f"Trend-aligned Bearish Consensus ({sell_votes}/{total_models} models)"
-        else:
-            action = "HOLD"
-            reason = f"Market in balance or choppy consensus ({buy_votes} Buy, {sell_votes} Sell, {hold_votes} Hold)"
-
-        # Apply Anti-Falling-Knife Interceptor AFTER gating
-        if action == "BUY" and falling_knife:
-            action = "HOLD"
-            reason = "⚠️ FALLING KNIFE — Wait for rejection/confirmation candle before entry"
-        elif action == "SELL" and rising_knife:
-            action = "HOLD"
-            reason = "⚠️ RISING KNIFE — Wait for rejection/confirmation candle before entry"
-
-        # Append mean-reversion zone note if present
-        if revert_note and action == "HOLD":
-            reason = f"{reason} | {revert_note}"
-
-        dominant_votes = max(buy_votes, sell_votes, hold_votes)
-        confidence = round((dominant_votes / total_models) * 100, 1)
-
-        rec_tp_pts = regime_info.get("recommended_tp_pts", 200)
-        rec_sl_pts = regime_info.get("recommended_sl_pts", 120)
-        point = 0.1
-
-        if action == "BUY":
-            entry_price = current_price
-            sl_price = round(entry_price - (rec_sl_pts * point), 2)
-            tp1_price = round(entry_price + (rec_tp_pts * 0.6 * point), 2)
-            tp2_price = round(entry_price + (rec_tp_pts * point), 2)
-            rr = round((tp2_price - entry_price) / max(entry_price - sl_price, 0.1), 2)
-        elif action == "SELL":
-            entry_price = current_price
-            sl_price = round(entry_price + (rec_sl_pts * point), 2)
-            tp1_price = round(entry_price - (rec_tp_pts * 0.6 * point), 2)
-            tp2_price = round(entry_price - (rec_tp_pts * point), 2)
-            rr = round((entry_price - tp2_price) / max(sl_price - entry_price, 0.1), 2)
-        else:
-            entry_price = current_price
-            sl_price = 0.0
-            tp1_price = 0.0
-            tp2_price = 0.0
-            rr = 0.0
-
-        return {
-            "action": action,
-            "confidence": confidence,
-            "buy_votes": buy_votes,
-            "sell_votes": sell_votes,
-            "hold_votes": hold_votes,
-            "total_models": total_models,
-            "votes": votes,
-            "filter_reason": reason,
-            "falling_knife_warning": falling_knife and action == "HOLD",
-            "entry_price": entry_price,
-            "sl_price": sl_price,
-            "tp1_price": tp1_price,
-            "tp2_price": tp2_price,
-            "risk_reward_ratio": rr,
-            "recommended_tp_pts": rec_tp_pts,
-            "recommended_sl_pts": rec_sl_pts
-        }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DIRECTIONAL BIAS ENGINE — Price Action Sniper Radar
-# ─────────────────────────────────────────────────────────────────────────────
-
-class DirectionalBiasEngine:
-    """
-    Aggregates MTF regime alignment, KER scores, and ensemble consensus
-    to produce a single Directional Bias (BULLISH / BEARISH / NEUTRAL)
-    and an Edge Score (0–100) for Price Action day trading.
-
-    Scoring Breakdown (total 100 pts):
-    - MTF Alignment (H1+M15+M5+M1):  40 pts  — most important for day trading
-    - KER (H1+M15 averaged):          30 pts  — chop vs. trend quality
-    - AI Consensus Strength:          20 pts  — ensemble vote confidence
-    - ADX Trend Power (exec TF):      10 pts  — directional momentum
-    """
-
-    MTF_WATCH = ["H1", "M15", "M5", "M1"]   # day trading Timeframes
-
     def compute(
         self,
         mtf_regimes: Dict[str, Dict[str, Any]],
-        ensemble_result: Dict[str, Any],
         exec_regime: Dict[str, Any],
-        data_store: Dict[str, "pd.DataFrame"]
+        data_store: Dict[str, pd.DataFrame],
+        exec_tf: str = "M5",
+        **kwargs
     ) -> Dict[str, Any]:
 
-        # ── 1. MTF Alignment Score (40 pts) ──
+        # ── 1. MTF Alignment Score (50 pts) ──
         regimes_present = {
             tf: mtf_regimes[tf]["regime"]
             for tf in self.MTF_WATCH if tf in mtf_regimes
@@ -572,27 +275,27 @@ class DirectionalBiasEngine:
 
         if up_count == total_watch:
             mtf_dir = "BULLISH"
-            mtf_score = 40
+            mtf_score = 50
         elif down_count == total_watch:
             mtf_dir = "BEARISH"
-            mtf_score = 40
+            mtf_score = 50
         elif up_count >= 3 and up_count > down_count:
             mtf_dir = "BULLISH"
-            mtf_score = 28
+            mtf_score = 35
         elif down_count >= 3 and down_count > up_count:
             mtf_dir = "BEARISH"
-            mtf_score = 28
+            mtf_score = 35
         elif up_count >= 2 and up_count > down_count:
             mtf_dir = "BULLISH"
-            mtf_score = 14
+            mtf_score = 18
         elif down_count >= 2 and down_count > up_count:
             mtf_dir = "BEARISH"
-            mtf_score = 14
+            mtf_score = 18
         else:
             mtf_dir = "NEUTRAL"
             mtf_score = 0
 
-        # ── 2. KER Score (30 pts) — average H1 & M15 for day trading ──
+        # ── 2. KER Score (35 pts) — average H1 & M15 for day trading ──
         ker_detector = MarketRegimeDetector()
         ker_values = []
         for tf in ["H1", "M15"]:  # day trading reference TFs
@@ -603,59 +306,50 @@ class DirectionalBiasEngine:
 
         if avg_ker >= 0.60:
             ker_label = "TRENDING"
-            ker_score = 30
+            ker_score = 35
         elif avg_ker >= 0.45:
             ker_label = "DRIFTING"
-            ker_score = 15
+            ker_score = 20
         elif avg_ker >= 0.30:
             ker_label = "WEAK DRIFT"
-            ker_score = 5
+            ker_score = 10
         else:
             ker_label = "CHOPPY"
             ker_score = 0
 
-        # ── 3. AI Consensus Score (20 pts) ──
-        buy_v = ensemble_result.get("buy_votes", 0)
-        sell_v = ensemble_result.get("sell_votes", 0)
-        total_m = ensemble_result.get("total_models", 9)
-        dominant_votes = max(buy_v, sell_v)
-        consensus_pct = dominant_votes / max(total_m, 1)
-
-        if consensus_pct >= 0.78:   # ≥7/9 models
-            ai_score = 20
-        elif consensus_pct >= 0.67:  # ≥6/9
-            ai_score = 14
-        elif consensus_pct >= 0.55:  # ≥5/9
-            ai_score = 7
-        else:
-            ai_score = 0
-
-        # Direction agreement: AI direction must align with MTF direction
-        ai_vote_dir = "BULLISH" if buy_v > sell_v else ("BEARISH" if sell_v > buy_v else "NEUTRAL")
-        if ai_vote_dir != mtf_dir and mtf_dir != "NEUTRAL":
-            ai_score = max(0, ai_score - 10)  # penalize AI-MTF conflict
-
-        # ── 4. ADX Score (10 pts) ──
+        # ── 3. ADX Score (15 pts) ──
         adx = exec_regime.get("adx", 20.0)
         if adx >= 35:
-            adx_score = 10
+            adx_score = 15
         elif adx >= 25:
-            adx_score = 7
+            adx_score = 10
         elif adx >= 20:
-            adx_score = 3
+            adx_score = 5
         else:
             adx_score = 0
 
-        # ── Final Edge Score ──
-        edge_score = min(100, mtf_score + ker_score + ai_score + adx_score)
+        # ── Final Edge Score (0–100) ──
+        edge_score = min(100, mtf_score + ker_score + adx_score)
+
+        # ── Falling-knife / Rising-knife checks ──
+        check_df = data_store.get(exec_tf, data_store.get("M5"))
+        current_atr = exec_regime.get("atr", 2.0)
+        falling_knife_active = self._check_falling_knife(check_df, current_atr)
+        rising_knife_active = self._check_rising_knife(check_df, current_atr)
 
         # ── Determine Final Directional Bias ──
-        if edge_score >= 60 and mtf_dir == "BULLISH":
+        if falling_knife_active:
+            final_bias = "BEARISH" if mtf_dir == "BEARISH" else "NEUTRAL"
+            bias_detail = "⚠️ FALLING KNIFE DETECTED — Aggressive bearish momentum, wait for rejection candle before entry"
+        elif rising_knife_active:
+            final_bias = "BULLISH" if mtf_dir == "BULLISH" else "NEUTRAL"
+            bias_detail = "⚠️ RISING KNIFE DETECTED — Aggressive bullish spike, wait for price stabilization"
+        elif edge_score >= 60 and mtf_dir == "BULLISH":
             final_bias = "BULLISH"
-            bias_detail = f"High-probability bullish environment — look for BUY setups on M1/M5 pullbacks"
+            bias_detail = "High-probability bullish environment — look for BUY setups on M1/M5 pullbacks"
         elif edge_score >= 60 and mtf_dir == "BEARISH":
             final_bias = "BEARISH"
-            bias_detail = f"High-probability bearish environment — look for SELL setups on M1/M5 bounces"
+            bias_detail = "High-probability bearish environment — look for SELL setups on M1/M5 bounces"
         elif edge_score >= 35 and mtf_dir != "NEUTRAL":
             final_bias = mtf_dir
             bias_detail = f"Moderate {mtf_dir.lower()} lean — selective setups only, reduce size"
@@ -669,11 +363,6 @@ class DirectionalBiasEngine:
             for tf in self.MTF_WATCH
         }
 
-        # ── Falling-knife flag from ensemble ──
-        falling_knife_active = ensemble_result.get("falling_knife_warning", False)
-        if falling_knife_active:
-            bias_detail = "⚠️ FALLING KNIFE DETECTED — Wait for price to stabilize before entry"
-
         return {
             "directional_bias": final_bias,
             "bias_detail": bias_detail,
@@ -685,7 +374,7 @@ class DirectionalBiasEngine:
             "mtf_alignment_count": f"{max(up_count, down_count)}/{total_watch}",
             "mtf_alignment_direction": mtf_dir,
             "mtf_breakdown": mtf_breakdown,
-            "ai_consensus_score": ai_score,
+            "ai_consensus_score": 0,
             "adx_score": adx_score,
             "falling_knife_active": falling_knife_active,
         }
@@ -722,7 +411,7 @@ def _load_staged_csvs(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR) -> Di
 
 
 def analyze_staged_data(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR, primary_tf: str = "M5") -> Dict[str, Any]:
-    """Loads staged CSVs and runs regime detection, ensemble inference, and directional bias."""
+    """Loads staged CSVs and runs regime detection, Price Action & MTF directional bias."""
     staging_dir = Path(staging_dir)
     if not staging_dir.exists():
         fallback = Path(__file__).resolve().parent.parent / "exportedpricedata"
@@ -743,16 +432,13 @@ def analyze_staged_data(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR, pri
     exec_df = data_store[exec_tf]
     exec_regime = mtf_regimes[exec_tf]
 
-    ensemble_engine = EnsembleEngine()
-    ensemble_result = ensemble_engine.predict(exec_df, exec_regime)
-
     # Directional Bias (Price Action Sniper Radar)
     bias_engine = DirectionalBiasEngine()
     directional_bias = bias_engine.compute(
         mtf_regimes=mtf_regimes,
-        ensemble_result=ensemble_result,
         exec_regime=exec_regime,
-        data_store=data_store
+        data_store=data_store,
+        exec_tf=exec_tf
     )
 
     # Use M5 last bar for display and closing price
@@ -802,7 +488,7 @@ def analyze_staged_data(staging_dir: Union[Path, str] = DEFAULT_STAGING_DIR, pri
         "latest_price": round(current_price, 2),
         "execution_timeframe": exec_tf,
         "regime": exec_regime,
-        "ensemble": ensemble_result,
+        "ensemble": {},
         "directional_bias": directional_bias,
         "_mtf_regimes": mtf_regimes,   # internal: used by setup_detector
         "multi_timeframe": {

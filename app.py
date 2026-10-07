@@ -189,7 +189,8 @@ def run_fetch_and_analysis_cycle():
             f"Symbol: {current_symbol} | Base TF: {current_base_tf} | "
             f"Source: {'MT5' if mt5_ok else 'CSV'} | "
             f"Latest Bar: {latest_data.get('latest_bar_time')} | "
-            f"Decision: {latest_data.get('ensemble', {}).get('action')}"
+            f"Bias: {latest_data.get('directional_bias', {}).get('directional_bias')} "
+            f"(Edge: {latest_data.get('directional_bias', {}).get('edge_score')}/100)"
         )
     except Exception as e:
         import traceback
