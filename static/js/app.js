@@ -608,93 +608,25 @@ function renderDashboard(payload) {
         dataSourceElem.style.border = src === "MT5 Live" ? "1px solid #10b981" : "1px solid #f59e0b";
     }
 
-    // Decision Card
-    const ensemble = data.ensemble || {};
-    const action = ensemble.action || "HOLD";
-    const confidence = ensemble.confidence || 0;
 
-    const actionBadge = document.getElementById("actionBadge");
-    actionBadge.className = `action-badge ${action.toLowerCase()}`;
-    if (action === "BUY") {
-        actionBadge.textContent = "▲ BUY SIGNAL";
-    } else if (action === "SELL") {
-        actionBadge.textContent = "▼ SELL SIGNAL";
-    } else {
-        actionBadge.textContent = "■ HOLD / NEUTRAL";
-    }
-
-    document.getElementById("confidenceScore").textContent = `${confidence}%`;
-    document.getElementById("confidenceBar").style.width = `${confidence}%`;
-    document.getElementById("decisionReason").textContent = ensemble.filter_reason || "Analyzing price structure...";
-
+    // Live Price Bar
     const currentPrice = data.current_price || data.latest_price || 0.0;
     const currentPriceElem = document.getElementById("currentPriceDisplay");
-    currentPriceElem.textContent = `$${currentPrice.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
-    currentPriceElem.title = "M5 Candle Close Price";
+    if (currentPriceElem) {
+        currentPriceElem.textContent = `$${currentPrice.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
+        currentPriceElem.title = "Latest close price from MT5 data";
+    }
 
-    const entry = ensemble.entry_price || currentPrice;
-    document.getElementById("entryPrice").textContent = `$${entry.toLocaleString("en-US", {minimumFractionDigits: 2})}`;
-    document.getElementById("slPrice").textContent = ensemble.sl_price ? `$${ensemble.sl_price.toLocaleString("en-US", {minimumFractionDigits: 2})}` : "$0.00";
-    document.getElementById("tp1Price").textContent = ensemble.tp1_price ? `$${ensemble.tp1_price.toLocaleString("en-US", {minimumFractionDigits: 2})}` : "$0.00";
-    document.getElementById("rrRatio").textContent = `1:${ensemble.risk_reward_ratio || 0.0}`;
+    // Staging directory path
+    const stagingElem = document.getElementById("stagingPathDisplay");
+    if (stagingElem && data.staging_dir) {
+        stagingElem.textContent = data.staging_dir;
+    }
 
-    // Regime Card
-    const regime = data.regime || {};
-    const regimeName = regime.regime || "RANGING";
-    const regimeBadge = document.getElementById("regimeBadge");
-    regimeBadge.textContent = regimeName.replace("_", " ");
-    regimeBadge.className = `regime-badge ${regimeName.toLowerCase().replace("_", "-")}`;
-
-    const regimeDescs = {
-        "TRENDING_UP": "Strong Bullish Momentum — Pullback Buying Preferred",
-        "TRENDING_DOWN": "Strong Bearish Momentum — Rally Selling Preferred",
-        "HIGH_VOLATILITY": "High Volatility Spike — Reduced Risk & Wider Stop",
-        "RANGING": "Range Bound Market — Boundary Mean Reversion"
-    };
-    document.getElementById("regimeDesc").textContent = regimeDescs[regimeName] || "Market in consolidation";
-
-    document.getElementById("adxValue").textContent = regime.adx !== undefined ? regime.adx.toFixed(1) : "--";
-    document.getElementById("atrValue").textContent = regime.atr !== undefined ? `$${regime.atr.toFixed(2)}` : "$--";
-    document.getElementById("riskMultValue").textContent = regime.risk_multiplier !== undefined ? `${regime.risk_multiplier}x` : "1.0x";
-    document.getElementById("volStateValue").textContent = regime.volatility_status || "NORMAL";
-
-    // Voting Distribution
-    const buyVotes = ensemble.buy_votes || 0;
-    const sellVotes = ensemble.sell_votes || 0;
-    const holdVotes = ensemble.hold_votes || 0;
-    const totalModels = ensemble.total_models || 9;
-
-    document.getElementById("buyCount").textContent = buyVotes;
-    document.getElementById("sellCount").textContent = sellVotes;
-    document.getElementById("holdCount").textContent = holdVotes;
-
-    const buyPct = (buyVotes / totalModels) * 100;
-    const sellPct = (sellVotes / totalModels) * 100;
-    const holdPct = (holdVotes / totalModels) * 100;
-
-    document.getElementById("voteBuyBar").style.width = `${buyPct}%`;
-    document.getElementById("voteSellBar").style.width = `${sellPct}%`;
-    document.getElementById("voteHoldBar").style.width = `${holdPct}%`;
-
-    document.getElementById("recTpPts").textContent = `+${regime.recommended_tp_pts || 0} pts`;
-    document.getElementById("recSlPts").textContent = `-${regime.recommended_sl_pts || 0} pts`;
-
-    // 9 Models Table
-    const modelsTbody = document.getElementById("modelsTableBody");
-    const votes = ensemble.votes || {};
-    if (Object.keys(votes).length > 0) {
-        let rowsHtml = "";
-        for (const [mName, mVote] of Object.entries(votes)) {
-            const vClass = mVote.toLowerCase();
-            rowsHtml += `
-            <tr>
-                <td style="font-weight: 500; color: #f1f5f9;">${mName}</td>
-                <td style="color: #94a3b8; font-size: 0.82rem;">Ensemble Voter</td>
-                <td style="text-align: right;"><span class="table-badge ${vClass}">${mVote}</span></td>
-            </tr>
-            `;
-        }
-        modelsTbody.innerHTML = rowsHtml;
+    // MTF Last Updated timestamp
+    const mtfUpdatedElem = document.getElementById("mtfLastUpdated");
+    if (mtfUpdatedElem && data.updated_at) {
+        mtfUpdatedElem.textContent = `Updated: ${data.updated_at}`;
     }
 
     // MTF Table (Strict descending order: D1 -> H4 -> H1 -> M15 -> M5 -> M1)
@@ -963,47 +895,40 @@ function playAlertSound(type = "standard") {
 }
 
 
+
 function checkAndTriggerSignalAlert(data, payload) {
     if (!data) return;
-    const ensemble = data.ensemble || {};
-    const action = (ensemble.action || "HOLD").toUpperCase();
 
-    // User rule: only BUY or SELL triggers popup. If HOLD, do nothing.
-    if (action !== "BUY" && action !== "SELL") {
-        return;
-    }
+    // Alert is now driven purely by Directional Bias, not ensemble votes
+    const bias = data.directional_bias || {};
+    const rawBiasDir = (bias.directional_bias || "NEUTRAL").toUpperCase();
+    const edgeScore = bias.edge_score || 0;
+    const isBullish = rawBiasDir.includes("BULLISH");
+    const isBearish = rawBiasDir.includes("BEARISH");
 
+    // Only BUY or SELL bias triggers popup
+    if (!isBullish && !isBearish) return;
+
+    const action = isBullish ? "BUY" : "SELL";
     const symbol = payload?.symbol || data.symbol || "XAUUSD";
     const tf = payload?.base_tf || data.execution_timeframe || "M5";
     const updateTime = data.updated_at || data.latest_bar_time || "";
 
-    // Determine Directional Bias alignment
-    const bias = data.directional_bias || {};
-    const rawBiasDir = (bias.directional_bias || "NEUTRAL").toUpperCase();
-    const edgeScore = bias.edge_score || 0;
-    const isBullishBias = rawBiasDir.includes("BULLISH");
-    const isBearishBias = rawBiasDir.includes("BEARISH");
-
-    let alertType = "STANDARD"; // "SNIPER_REALIGNMENT" | "SIGNIFICANT_PULLBACK" | "STANDARD"
+    let alertType = "STANDARD";
     let title = "";
     let subtitle = "";
     let customReason = "";
 
-    if ((action === "BUY" && isBullishBias) || (action === "SELL" && isBearishBias)) {
+    if (edgeScore >= 70) {
         alertType = "SNIPER_REALIGNMENT";
-        title = action === "BUY" ? "BULLISH SNIPER RE-ALIGNMENT" : "BEARISH SNIPER RE-ALIGNMENT";
-        subtitle = "🎯 Pullback Completed • Bias & Executive Synchronized • Ready for M1/M5 Entry";
-        customReason = `🎯 Golden Sniper Setup: Directional Bias [${rawBiasDir}] and Executive Decision [${action}] are now in full harmony (Edge: ${edgeScore}/100). The significant pullback has completed. Look for Price Action confirmation on M1/M5 to execute.`;
-    } else if ((action === "SELL" && isBullishBias) || (action === "BUY" && isBearishBias)) {
-        alertType = "SIGNIFICANT_PULLBACK";
-        title = action === "SELL" ? "SIGNIFICANT PULLBACK (M5 SELL)" : "SIGNIFICANT BOUNCE (M5 BUY)";
-        subtitle = `⚠️ Counter-Trend Retracement • Macro Bias: ${rawBiasDir} • DO NOT CHOP`;
-        customReason = `⚠️ Significant Retracement: AI models on ${tf} detected heavy momentum (${ensemble.buy_votes || 0}B / ${ensemble.sell_votes || 0}S) opposite to Macro Bias [${rawBiasDir}]. Do NOT chase counter-trend — wait for pullback to hit Support/Value Area, then prepare for Sniper BUY!`;
+        title = isBullish ? "BULLISH SNIPER ALIGNMENT" : "BEARISH SNIPER ALIGNMENT";
+        subtitle = "🎯 High-Edge Setup • Price Action + MTF Aligned";
+        customReason = `🎯 Strong ${rawBiasDir} Directional Bias detected with Edge Score ${edgeScore}/100. MTF stack aligned. Look for Price Action confirmation on M1/M5 to execute.`;
     } else {
         alertType = "STANDARD";
-        title = action === "BUY" ? "BUY SIGNAL DETECTED" : "SELL SIGNAL DETECTED";
-        subtitle = `Executive Decision on ${tf} • Directional Bias: ${rawBiasDir}`;
-        customReason = ensemble.filter_reason || "Executive consensus reached across 9+ AI models.";
+        title = isBullish ? "BULLISH BIAS DETECTED" : "BEARISH BIAS DETECTED";
+        subtitle = `Directional Bias on ${tf} • Edge: ${edgeScore}/100`;
+        customReason = bias.bias_detail || `${rawBiasDir} directional bias detected with Edge Score ${edgeScore}/100.`;
     }
 
     // Guard: check per-type config toggle
@@ -1032,11 +957,11 @@ function checkAndTriggerSignalAlert(data, payload) {
         customReason: customReason,
         symbol: symbol,
         timeframe: tf,
-        confidence: ensemble.confidence || 0,
-        entryPrice: ensemble.entry_price || data.current_price || 0,
-        slPrice: ensemble.sl_price || 0,
-        tp1Price: ensemble.tp1_price || 0,
-        rrRatio: ensemble.risk_reward_ratio || 0.0,
+        confidence: edgeScore,
+        entryPrice: data.current_price || data.latest_price || 0,
+        slPrice: 0,
+        tp1Price: 0,
+        rrRatio: 0.0,
         regime: data.regime?.regime || "RANGING",
         edgeScore: edgeScore,
         biasDir: rawBiasDir,

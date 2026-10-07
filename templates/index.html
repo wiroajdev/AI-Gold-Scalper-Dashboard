@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.2.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.0.0">
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -18,7 +18,7 @@
                 <div class="brand-icon">👑</div>
                 <div class="brand-text">
                     <h1>AI Gold Scalper <span id="activeSymbolBadge" class="badge-symbol">XAUUSD.iux</span> <span class="badge-live">LIVE</span></h1>
-                    <p>Direct MT5 Feed • 9+ Ensemble Machine Learning & Regime Engine</p>
+                    <p>Direct MT5 Feed • MT5 Price Chart Analyzer</p>
                 </div>
             </div>
 
@@ -101,10 +101,6 @@
                     <span class="btn-icon" id="soundBtnIcon">🔊</span>
                     <span class="btn-text" id="soundBtnText">Sound: ON</span>
                 </button>
-                <a href="/report" target="_blank" class="btn-secondary" style="text-decoration:none;" title="เปิดรายงานวิเคราะห์เชิงลึก 9+ Ensemble Models & Choppy Market Filter">
-                    <span class="btn-icon">📑</span>
-                    <span class="btn-text">Ensemble Report</span>
-                </a>
                 <a href="/guide" target="_blank" class="btn-secondary" style="text-decoration:none;" title="เปิดคู่มือการใช้งานและการตีความผล (User Guide & Interpretation Manual)">
                     <span class="btn-icon">📖</span>
                     <span class="btn-text">User Guide</span>
@@ -252,163 +248,25 @@
             <span id="errorMessage">Error text</span>
         </div>
 
-        <!-- Main Dashboard Grid -->
-        <main class="dashboard-grid">
-            <!-- Card 1: Executive Decision -->
-            <div class="card decision-card" id="decisionCard">
-                <div class="card-header">
-                    <div class="decision-title-group">
-                        <span class="card-subtitle">Executive Decision</span>
-                        <div class="tf-select-wrapper" title="เลือก Timeframe สำหรับการประมวลผล 9+ AI Ensemble Models">
-                            <select id="baseTfSelect" class="tf-select-pill">
-                                <option value="M1">TF: M1</option>
-                                <option value="M5" selected>TF: M5</option>
-                                <option value="M15">TF: M15</option>
-                                <option value="H1">TF: H1</option>
-                                <option value="H4">TF: H4</option>
-                                <option value="D1">TF: D1</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="confidence-badge">
-                        <span class="label">CONFIDENCE</span>
-                        <strong id="confidenceScore" class="mono">0%</strong>
-                    </div>
-                </div>
 
-                <div class="action-badge-wrapper">
-                    <div id="actionBadge" class="action-badge hold">
-                        ■ INITIALIZING
-                    </div>
-                </div>
-
-                <div class="progress-bar-bg">
-                    <div id="confidenceBar" class="progress-bar-fill" style="width: 0%;"></div>
-                </div>
-
-                <p id="decisionReason" class="decision-reason">
-                    Loading initial model state...
-                </p>
-
-                <!-- Target Price Levels Grid -->
-                <div class="levels-grid">
-                    <div class="level-box">
-                        <span class="level-label">Suggested Entry</span>
-                        <strong id="entryPrice" class="mono">$0.00</strong>
-                    </div>
-                    <div class="level-box sl-box">
-                        <span class="level-label">Stop Loss</span>
-                        <strong id="slPrice" class="mono">$0.00</strong>
-                    </div>
-                    <div class="level-box tp-box">
-                        <span class="level-label">Take Profit 1</span>
-                        <strong id="tp1Price" class="mono">$0.00</strong>
-                    </div>
-                    <div class="level-box rr-box">
-                        <span class="level-label">R:R Ratio</span>
-                        <strong id="rrRatio" class="mono">1:0.0</strong>
-                    </div>
+        <!-- Live Price Card (Compact) -->
+        <section class="live-price-bar card">
+            <div class="live-price-inner">
+                <div class="live-price-label">💰 XAUUSD Live Price</div>
+                <div class="live-price-value mono" id="currentPriceDisplay">$0.00</div>
+                <div class="live-price-meta">
+                    <span class="live-price-staging-label">Staging:</span>
+                    <code id="stagingPathDisplay" class="staging-path">—</code>
                 </div>
             </div>
+        </section>
 
-            <!-- Card 2: Market Regime Detector -->
-            <div class="card regime-card">
-                <div class="card-header">
-                    <span class="card-subtitle">Market Regime Detector</span>
-                    <span class="tf-pill" id="regimeTfPill">TF: M5</span>
-                </div>
-
-                <div class="regime-status-wrapper">
-                    <span id="regimeBadge" class="regime-badge ranging">RANGING</span>
-                </div>
-                <p id="regimeDesc" class="regime-desc">
-                    Calculating market structure and volatility bounds...
-                </p>
-
-                <div class="metrics-grid">
-                    <div class="metric-item">
-                        <span class="metric-label">ADX Trend Power</span>
-                        <strong id="adxValue" class="mono">--</strong>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">ATR Volatility</span>
-                        <strong id="atrValue" class="mono">$--</strong>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Risk Multiplier</span>
-                        <strong id="riskMultValue" class="mono">1.0x</strong>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Volatility State</span>
-                        <strong id="volStateValue">NORMAL</strong>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card 3: Voting Distribution -->
-            <div class="card votes-card">
-                <div class="card-header">
-                    <span class="card-subtitle">Ensemble Consensus</span>
-                    <span class="mono" id="currentPriceDisplay" style="color: #fbbf24; font-weight: 700;">$0.00</span>
-                </div>
-
-                <div class="vote-counts">
-                    <span class="buy-count">Buy: <strong id="buyCount">0</strong></span>
-                    <span class="sell-count">Sell: <strong id="sellCount">0</strong></span>
-                    <span class="hold-count">Hold: <strong id="holdCount">0</strong></span>
-                </div>
-
-                <div class="vote-split-bar">
-                    <div id="voteBuyBar" class="split-buy" style="width: 0%;"></div>
-                    <div id="voteSellBar" class="split-sell" style="width: 0%;"></div>
-                    <div id="voteHoldBar" class="split-hold" style="width: 100%;"></div>
-                </div>
-
-                <div class="scalp-targets-box">
-                    <div class="target-row">
-                        <span>Recommended TP:</span>
-                        <strong id="recTpPts" class="mono text-green">+0 pts</strong>
-                    </div>
-                    <div class="target-row">
-                        <span>Recommended SL:</span>
-                        <strong id="recSlPts" class="mono text-red">-0 pts</strong>
-                    </div>
-                    <div class="target-row">
-                        <span>Staging Directory:</span>
-                        <code id="stagingPathDisplay" class="staging-path">C:\web-apps\AI-Gold-Scalper-Dashboard\exportedpricedata\</code>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-
-        <!-- Bottom Grid: 9 Models Breakdown &amp; MTF Matrix -->
-        <section class="details-grid">
-            <!-- 9-Model Table -->
-            <div class="card table-card">
-                <div class="card-header">
-                    <h3>🤖 9+ Ensemble Models Voting Breakdown</h3>
-                </div>
-                <div class="table-responsive">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Algorithm</th>
-                                <th>Category</th>
-                                <th style="text-align: right;">Current Vote</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modelsTableBody">
-                            <tr><td colspan="3" style="text-align: center; color: #64748b;">Loading models...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Multi-Timeframe Alignment Matrix -->
-            <div class="card table-card">
+        <!-- Multi-Timeframe Alignment Matrix (Full Width) -->
+        <section class="mtf-section">
+            <div class="card table-card mtf-full-card">
                 <div class="card-header">
                     <h3>📊 Multi-Timeframe Alignment Matrix</h3>
+                    <span class="mtf-last-updated mono" id="mtfLastUpdated" style="font-size:0.78rem;color:#64748b;"></span>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
@@ -429,6 +287,7 @@
                 </div>
             </div>
         </section>
+
 
         <!-- Section: TradingView Interactive Price Chart -->
         <section class="chart-section">
@@ -761,8 +620,8 @@
                     </div>
                 </div>
                 <div class="modal-confidence-box">
-                    <span class="modal-confidence-label">CONFIDENCE</span>
-                    <strong class="modal-confidence-val mono" id="modalConfidenceVal">85%</strong>
+                    <span class="modal-confidence-label">EDGE SCORE</span>
+                    <strong class="modal-confidence-val mono" id="modalConfidenceVal">85</strong>
                 </div>
             </div>
 
@@ -787,7 +646,7 @@
 
             <div class="modal-reason-box">
                 <div class="modal-reason-title">
-                    <span>🧠 AI Ensemble Analysis:</span>
+                    <span>🎯 Market Analysis:</span>
                     <span id="modalRegimeBadge" class="modal-regime-pill">TRENDING UP</span>
                     <span id="modalAlignmentBadge" class="modal-regime-pill" style="display:none; margin-left:6px;"></span>
                 </div>
@@ -854,7 +713,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=2.3.1"></script>
+    <script src="/static/js/app.js?v=3.0.0"></script>
     <script src="/static/js/chart.js?v=1.1.0"></script>
 </body>
 </html>

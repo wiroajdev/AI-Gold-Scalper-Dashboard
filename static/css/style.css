@@ -2893,3 +2893,65 @@ input:checked + .slider:before {
     background: rgba(100, 116, 139, 0.1);
     border-color: rgba(148, 163, 184, 0.25);
 }
+
+/* ══════════════════════════════════════════════════════
+   LIVE PRICE BAR — replaces 3-card dashboard grid
+   ══════════════════════════════════════════════════════ */
+.live-price-bar {
+    margin-bottom: 20px;
+    padding: 16px 24px;
+}
+
+.live-price-inner {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.live-price-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.live-price-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #fbbf24;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.35);
+}
+
+.live-price-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.live-price-staging-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════════════
+   MTF SECTION — full width matrix
+   ══════════════════════════════════════════════════════ */
+.mtf-section {
+    margin-bottom: 24px;
+}
+
+.mtf-full-card {
+    width: 100%;
+}
+
+.mtf-full-card .data-table th,
+.mtf-full-card .data-table td {
+    padding: 12px 16px;
+}
